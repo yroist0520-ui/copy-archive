@@ -14,6 +14,31 @@ const app = document.getElementById('app');
 const modalHost = document.getElementById('modal-host');
 const toastHost = document.getElementById('toast-host');
 
+/* ---------------- 部署基路径 ---------------- */
+
+/**
+ * 应用根路径。GitHub Pages 子路径部署时为 /copy-archive/，本地运行为 /。
+ * 由模块自身地址推导，因此任何部署深度都能正确解析。
+ */
+export const BASE = new URL('../', import.meta.url).pathname;
+
+const BASE_NO_SLASH = BASE === '/' ? '' : BASE.replace(/\/$/, '');
+
+/** 应用内路径 → 浏览器可访问的完整路径 */
+function appUrl(path) {
+  if (!path.startsWith('/')) return path;
+  return `${BASE_NO_SLASH}${path}`;
+}
+
+/** 浏览器路径 → 应用内路径 */
+export function stripBase(pathname) {
+  if (BASE_NO_SLASH && pathname.startsWith(BASE_NO_SLASH)) {
+    const rest = pathname.slice(BASE_NO_SLASH.length);
+    return rest.startsWith('/') ? rest : `/${rest}`;
+  }
+  return pathname;
+}
+
 /* ---------------- 后端探测 ---------------- */
 
 /**
@@ -25,7 +50,7 @@ let backendProbe = null;
 
 function probeBackend() {
   if (!backendProbe) {
-    backendProbe = fetch('/api/health', {
+    backendProbe = fetch(appUrl('/api/health'), {
       method: 'GET',
       credentials: 'same-origin',
       headers: { 'X-Requested-With': 'XMLHttpRequest' },
@@ -69,7 +94,7 @@ export async function api(path, { method = 'GET', body, quiet = false } = {}) {
   }
   let response;
   try {
-    response = await fetch(path, options);
+    response = await fetch(appUrl(path), options);
   } catch (err) {
     if (!quiet) toast('网络连接失败，请检查网络后重试', 'error');
     throw err;
@@ -339,8 +364,9 @@ const routes = [];
 export function route(pattern, handler) { routes.push({ pattern, handler }); }
 
 export function navigate(path, replace = false) {
-  if (replace) history.replaceState({}, '', path);
-  else history.pushState({}, '', path);
+  const url = path.startsWith('/') ? appUrl(path) : path;
+  if (replace) history.replaceState({}, '', url);
+  else history.pushState({}, '', url);
   renderRoute();
   window.scrollTo({ top: 0, behavior: 'instant' });
 }
@@ -350,7 +376,7 @@ export function currentQuery() {
 }
 
 export async function renderRoute() {
-  const path = location.pathname;
+  const path = stripBase(location.pathname);
   document.querySelectorAll('.nav-link').forEach((a) => {
     const href = a.getAttribute('href');
     a.classList.toggle('active', href !== '/' ? path.startsWith(href) : path === '/');
@@ -409,7 +435,7 @@ document.addEventListener('click', (e) => {
   const link = e.target.closest('a[data-link]');
   if (link && link.origin === location.origin) {
     e.preventDefault();
-    navigate(link.pathname + link.search + link.hash);
+    navigate(stripBase(link.pathname) + link.search + link.hash);
   }
 });
 

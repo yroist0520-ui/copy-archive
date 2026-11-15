@@ -962,9 +962,20 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(403)
             return
         if not candidate.is_file() or not candidate.suffix:
-            candidate = PUBLIC_DIR / "index.html"
-        if not candidate.is_file():
-            self.send_error(404)
+            # SPA 深链：统一交给 404.html 回退，与 GitHub Pages 行为一致。
+            # 这样应用入口永远位于根路径，页面内相对资源路径不会错位。
+            fallback = PUBLIC_DIR / "404.html"
+            if not fallback.is_file():
+                self.send_error(404)
+                return
+            content = fallback.read_bytes()
+            self.send_response(404)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(content)))
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            if method == "GET":
+                self.wfile.write(content)
             return
         content = candidate.read_bytes()
         ctype = mimetypes.guess_type(str(candidate))[0] or "application/octet-stream"

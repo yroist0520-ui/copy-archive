@@ -1,5 +1,5 @@
 /* COPY ARCHIVE — 应用入口 */
-import { initCore, refreshSession, renderRoute, loadCategories, navigate } from './core.js';
+import { initCore, refreshSession, renderRoute, loadCategories, navigate, stripBase } from './core.js';
 import { registerHome } from './home.js';
 import { registerArchive } from './archive.js';
 import { registerUpload } from './upload.js';
@@ -23,7 +23,7 @@ await loadCategories();
 const redirect = sessionStorage.getItem('ca_redirect');
 if (redirect) {
   sessionStorage.removeItem('ca_redirect');
-  navigate(redirect, true);
+  navigate(stripBase(redirect), true);
 } else {
   await renderRoute();
 }

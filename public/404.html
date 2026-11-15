@@ -3,9 +3,32 @@
 <head><meta charset="UTF-8"><title>COPY ARCHIVE</title></head>
 <body>
 <script>
-  // GitHub Pages 单页应用深链兜底：保存原路径后回到入口，由 main.js 恢复路由。
-  sessionStorage.setItem('ca_redirect', location.pathname + location.search);
-  location.replace('/');
+  // GitHub Pages 单页应用深链兜底。
+  // 静态托管无法知道应用挂在哪一级目录，因此逐级向上探测 index.html，
+  // 找到第一个能访问的位置即为应用根，然后回到入口由 main.js 恢复路由。
+  (function () {
+    var levels = ['./', '../', '../../', '../../../', '../../../../'];
+    var saved = location.pathname + location.search;
+
+    function probe(index) {
+      if (index >= levels.length) {
+        location.replace('./');
+        return;
+      }
+      fetch(levels[index] + 'index.html', { method: 'GET', cache: 'no-store' })
+        .then(function (res) {
+          if (res.ok) {
+            sessionStorage.setItem('ca_redirect', saved);
+            location.replace(levels[index]);
+          } else {
+            probe(index + 1);
+          }
+        })
+        .catch(function () { probe(index + 1); });
+    }
+
+    probe(0);
+  })();
 </script>
 </body>
 </html>

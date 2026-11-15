@@ -1,7 +1,7 @@
 /* 个人档案：编辑、隐私设置、分享链接；公开档案匿名访问与站内搜索 */
 import {
   state, api, route, esc, fmtDate, openAuth, toast, copyText,
-  loadCategories, debounce, refreshSession, updateAuthButton, renderRoute,
+  loadCategories, debounce, refreshSession, updateAuthButton, renderRoute, BASE,
 } from './core.js';
 import { copyGrid, bindCopyCards, emptyState, categoryChips, bindChips, pagination } from './ui.js';
 import { openDetail } from './detail.js';
@@ -23,7 +23,7 @@ export function registerProfile() {
     await loadCategories();
     const me = state.user;
     const data = await api('/api/copies?pageSize=6&sort=newest', { quiet: true }).catch(() => ({ items: [], total: 0 }));
-    const shareUrl = `${location.origin}/u/${encodeURIComponent(me.username)}`;
+    const shareUrl = `${location.origin}${BASE.replace(/\/$/, '')}/u/${encodeURIComponent(me.username)}`;
     const publicCats = state.categories.filter((c) => (me.publicCategoryIds || []).includes(c.id));
 
     app.innerHTML = `
