@@ -4,7 +4,7 @@ import { esc, highlight, fmtDate, padNum, api, copyText, toast, openModal, confi
 export function categoryChips(categories, selectedIds = [], { single = false } = {}) {
   const selected = selectedIds.map(Number);
   return categories.map((c) => `
-    <button type="button" class="chip ${selected.includes(c.id) ? 'active' : ''}" data-cat="${c.id}" aria-pressed="${selected.includes(c.id)}">
+    <button type="button" class="chip ${selected.includes(c.id) ? 'active' : ''}" data-cat="${c.id}" aria-pressed="${selected.includes(c.id)}" style="--cat-color:${esc(c.color)}">
       <span class="cat-dot" style="background:${esc(c.color)}"></span>${esc(c.name)}
     </button>`).join('');
 }
@@ -32,7 +32,7 @@ export function emptyState(code, title, desc, action = '') {
 export function copyCard(item, {
   index = null, query = '', selectable = false, editable = true, publicView = false, list = false,
 } = {}) {
-  const cats = (item.categories || []).map((c) => `<span class="chip" style="min-height:22px;padding:1px 7px"><span class="cat-dot" style="background:${esc(c.color)}"></span>${esc(c.name)}</span>`).join('');
+  const cats = (item.categories || []).map((c) => `<span class="chip" style="--cat-color:${esc(c.color)};min-height:22px;padding:1px 9px"><span class="cat-dot" style="background:${esc(c.color)}"></span>${esc(c.name)}</span>`).join('');
   const tags = (item.tags || []).map((t) => `<span class="tag">${esc(t)}</span>`).join('');
   const long = item.content.length > 260 || item.content.split('\n').length > 6;
   const idx = index === null ? padNum(item.id) : padNum(index);
