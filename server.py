@@ -768,8 +768,9 @@ def handle_api(handler, method, path, query, conn):
         profile = get_profile(conn, me["id"])
         display_name = clean_text(body.get("displayName", profile["display_name"]), "昵称", required=True, max_len=40)
         bio = clean_text(body.get("bio", profile["bio"]), "简介", max_len=500)
-        avatar_url = clean_text(body.get("avatarUrl", profile["avatar_url"]), "头像", max_len=500)
-        cover_url = clean_text(body.get("coverUrl", profile["cover_url"]), "封面", max_len=500)
+        # 头像与封面为浏览器端压缩后的 data URL，容量远大于普通链接
+        avatar_url = clean_text(body.get("avatarUrl", profile["avatar_url"]), "头像", max_len=400000)
+        cover_url = clean_text(body.get("coverUrl", profile["cover_url"]), "封面", max_len=600000)
         theme = body.get("theme", profile["theme"])
         if theme not in ("paper", "ink", "newsprint"):
             raise ApiError(400, "主题不正确")
