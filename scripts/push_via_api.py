@@ -96,7 +96,7 @@ def main():
         print("需要环境变量 GH_TOKEN")
         return 1
 
-    if branch == "gh-pages":
+    if branch == "gh-pages" and not explicit:
         targets = []
         public = os.path.join(ROOT, "public")
         for base, _, names in os.walk(public):
