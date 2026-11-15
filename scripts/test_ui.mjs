@@ -1,6 +1,6 @@
 /* 真实浏览器 UI 冒烟测试：通过 CDP 驱动无头 Chromium，验证主要页面与交互。 */
 const CDP = 'http://127.0.0.1:9222';
-const BASE = 'http://127.0.0.1:8765';
+const BASE = process.env.CA_BASE || 'http://127.0.0.1:8765';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
 
@@ -56,6 +56,10 @@ check('首页渲染 Hero', await evaluate(`!!document.querySelector('.hero-title
 check('首页渲染搜索区', await evaluate(`!!document.querySelector('#home-q')`));
 check('首页渲染分类网格', await evaluate(`document.querySelectorAll('.category-tile').length >= 10`));
 check('首页渲染推荐/热门区块', await evaluate(`document.querySelectorAll('.section').length >= 5`));
+if (process.env.CA_EXPECT_LOCAL === '1') {
+  check('静态托管时显示本地模式标识', await evaluate(`!!document.querySelector('#mode-badge:not([hidden])')`));
+  check('本地模式数据确实落在浏览器', await evaluate(`!!localStorage.getItem('ca_local_db_v1')`));
+}
 
 // 2. 注册
 const stamp = String(Date.now()).slice(-6);

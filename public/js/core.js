@@ -1,19 +1,63 @@
 /* COPY ARCHIVE — 核心层：API、路由、状态、UI 原语 */
 
+import { localApi, setLocalMode } from './local-api.js';
+
 export const state = {
   user: null,
   categories: [],
   theme: 'paper',
   pageSize: 24,
+  localMode: false,
 };
 
 const app = document.getElementById('app');
 const modalHost = document.getElementById('modal-host');
 const toastHost = document.getElementById('toast-host');
 
+/* ---------------- 后端探测 ---------------- */
+
+/**
+ * 探测同源是否运行着 Python 后端。
+ * GitHub Pages 等纯静态托管下 /api/health 会返回 404，此时切换到本地模式，
+ * 由 local-api.js 以同一套契约在浏览器内提供完整功能。
+ */
+let backendProbe = null;
+
+function probeBackend() {
+  if (!backendProbe) {
+    backendProbe = fetch('/api/health', {
+      method: 'GET',
+      credentials: 'same-origin',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    })
+      .then((r) => r.ok)
+      .catch(() => false);
+  }
+  return backendProbe;
+}
+
+function markLocalMode() {
+  if (state.localMode) return;
+  state.localMode = true;
+  setLocalMode(true);
+  document.documentElement.dataset.mode = 'local';
+  const badge = document.getElementById('mode-badge');
+  if (badge) badge.hidden = false;
+}
+
 /* ---------------- API ---------------- */
 
 export async function api(path, { method = 'GET', body, quiet = false } = {}) {
+  if (path.startsWith('/api/') && !(await probeBackend())) {
+    markLocalMode();
+    try {
+      return await localApi(path, { method, body });
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('操作失败');
+      if (!quiet && error.status !== 404) toast(error.message, 'error');
+      throw error;
+    }
+  }
   const options = {
     method,
     credentials: 'same-origin',

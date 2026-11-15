@@ -339,3 +339,30 @@ textarea.input { padding: 12px; min-height: 120px; resize: vertical; font-family
   .profile-stats { gap: var(--s4); }
   .stat-num { font-size: 1.6rem; }
 }
+
+/* ---------- 本地模式提示条 ---------- */
+.mode-bar {
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper-deep);
+  position: relative; z-index: 1;
+}
+.mode-bar[hidden] { display: none; }
+.mode-bar-inner {
+  display: flex; align-items: baseline; gap: var(--s3);
+  padding-block: 10px;
+}
+.mode-tag {
+  font-size: var(--t-micro); letter-spacing: .14em; color: var(--accent);
+  border: 1px solid var(--accent); padding: 2px 6px 1px; flex-shrink: 0;
+  white-space: nowrap;
+}
+.mode-text { font-size: var(--t-small); color: var(--muted); line-height: 1.6; }
+.mode-text code {
+  font-family: var(--mono); font-size: var(--t-micro);
+  border: 1px solid var(--rule-strong); padding: 1px 5px; color: var(--ink-soft);
+}
+
+@media (max-width: 720px) {
+  .mode-bar-inner { flex-direction: column; align-items: flex-start; gap: 6px; padding-block: 12px; }
+  .mode-text { font-size: var(--t-micro); }
+}
