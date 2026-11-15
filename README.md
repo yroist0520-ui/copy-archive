@@ -81,27 +81,37 @@ python3 scripts/backup.py
 （`/copy-archive/`）都能正确解析资源与路由。`404.html` 通过逐级向上探测 `index.html` 定位应用根，
 深链（如 `/u/用户名`、`/archive`）刷新后自动回到入口并恢复路由。
 
+## 头像与封面
+
+档案页的头像、封面**直接选择本地图片**，不需要填写任何外部链接：
+
+- 浏览器端用 canvas 压缩后再保存——头像居中裁剪为 256×256，封面裁剪为 1600×500（16:5），
+  优先输出 WebP，不支持时退回 JPEG，原始文件不会离开浏览器。
+- 压缩结果以 data URL 形式写入档案字段，因此**纯静态托管形态同样可用**，不依赖后端文件服务。
+- 上传槽提供即时预览、容量提示与「移除」，保存后页面顶部头像与封面即时更新，无需刷新。
+
 ## 测试
 
 ```bash
 python3 scripts/test_api.py          # 后端 API 集成测试
 node scripts/test_ui.mjs             # 浏览器 UI 冒烟测试（需 headless Chromium）
+node scripts/test_avatar.mjs         # 头像 / 封面上传专项测试
 node scripts/test_live.mjs           # 线上端到端验收
 ```
 
 覆盖范围：注册登录、会话保持、30 个默认分类、多分类关联去重、分类改名同步、完全重复检测、
 批量导入原文无损（空格/标点/Unicode/换行）、正文/标题/分类/标签/多关键词搜索、多分类筛选、
 复制计数、收藏与取消收藏、三档隐私、跨账号越权拦截、批量管理、删除分类保留文案、
-重新登录持久化、分页与五种排序。
+重新登录持久化、分页与五种排序，以及头像上传的压缩、预览、保存、持久化、访客可见与移除。
 
-| 环境 | 结果 |
-|---|---|
-| 后端 API 集成测试 | **41/41 通过** |
-| UI 冒烟 · Python 后端服务器模式 | **26/26 通过** |
-| UI 冒烟 · 根路径静态托管 | **28/28 通过** |
-| UI 冒烟 · 子路径静态托管 | **28/28 通过** |
-| UI 冒烟 · **线上站点** | **28/28 通过** |
-| 线上端到端验收 | **12/12 通过** |
+| 环境 | UI 冒烟 | 头像专项 | API |
+|---|---|---|---|
+| Python 后端服务器模式 | 26/26 | 18/18 | 41/41 |
+| 根路径静态托管 | 28/28 | 18/18 | — |
+| 子路径静态托管 | 28/28 | 18/18 | — |
+| **线上站点** | **28/28** | **18/18** | — |
+
+线上端到端验收另计 **12/12 通过**（含分享链接、访客访问、复制只取正文）。
 
 复现静态托管环境：
 
@@ -109,6 +119,16 @@ node scripts/test_live.mjs           # 线上端到端验收
 python3 scripts/serve_static.py 8080                                    # 根路径
 CA_BASE_PATH=/copy-archive python3 scripts/serve_static.py 8081          # 子路径
 CA_BASE=http://127.0.0.1:8081/copy-archive CA_EXPECT_LOCAL=1 node scripts/test_ui.mjs
+```
+
+### 部署备用通道
+
+若本机到 `github.com` 的 git 传输端点被代理阻断（`api.github.com` 仍可用），
+可改走 REST API 推送：
+
+```bash
+GH_TOKEN=ghp_xxx python3 scripts/push_via_api.py main
+GH_TOKEN=ghp_xxx python3 scripts/push_via_api.py gh-pages
 ```
 
 ## 目录
