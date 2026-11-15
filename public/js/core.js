@@ -66,8 +66,6 @@ function markLocalMode() {
   state.localMode = true;
   setLocalMode(true);
   document.documentElement.dataset.mode = 'local';
-  const badge = document.getElementById('mode-badge');
-  if (badge) badge.hidden = false;
 }
 
 /* ---------------- API ---------------- */

@@ -733,23 +733,12 @@ html[data-theme="ink"] .archive-card { border-color: rgba(255, 255, 255, 0.1); }
 .upload-cover .upload-empty { width: 84px; }
 
 /* =========================================================
-   本地模式提示条
+   本地模式说明（页脚一行）
    ========================================================= */
-.mode-bar {
-  border-bottom: 1px solid var(--line-soft);
-  background: var(--surface-soft);
-  position: relative; z-index: 1;
-}
-.mode-bar-inner { display: flex; align-items: baseline; gap: var(--s3); padding-block: 10px; }
-.mode-tag {
-  font-family: var(--font-mono); font-size: var(--t-micro); letter-spacing: 0.14em; color: var(--accent);
-  border: 1px solid var(--accent); border-radius: var(--r-pill); padding: 2px 9px; flex-shrink: 0;
-  white-space: nowrap;
-}
-.mode-text { font-size: var(--t-micro); color: var(--muted); line-height: 1.7; }
-.mode-text code {
+.mode-foot {
+  margin-top: 10px;
   font-family: var(--font-mono); font-size: var(--t-micro);
-  border: 1px solid var(--line); border-radius: var(--r-xs); padding: 1px 5px; color: var(--ink-soft);
+  color: var(--faint); text-align: center; letter-spacing: 0.02em;
 }
 
 /* =========================================================
@@ -831,8 +820,7 @@ html[data-theme="ink"] .archive-card { border-color: rgba(255, 255, 255, 0.1); }
   .stat-num { font-size: 1.4rem; }
   .cover-strip { height: 110px; border-radius: var(--r-md); }
   .archive-grid { grid-template-columns: 1fr; }
-  .mode-bar-inner { flex-direction: column; align-items: flex-start; gap: 6px; padding-block: 12px; }
-  .mode-text { font-size: var(--t-micro); }
+  .mode-foot { font-size: var(--t-micro); margin-top: 8px; }
   .toast-host { bottom: 18px; }
 }
 
