@@ -340,6 +340,38 @@ textarea.input { padding: 12px; min-height: 120px; resize: vertical; font-family
   .stat-num { font-size: 1.6rem; }
 }
 
+/* ---------- 图片上传槽 ---------- */
+.upload-slot {
+  display: flex; align-items: center; gap: var(--s3);
+  border: 1px dashed var(--rule-strong);
+  padding: 10px 12px; min-height: 60px;
+  cursor: pointer; text-align: left;
+  transition: border-color var(--dur-fast), background var(--dur-fast);
+}
+.upload-slot:hover { border-color: var(--ink); background: var(--paper-deep); }
+.upload-slot:focus-within { border-color: var(--accent); }
+.upload-preview {
+  width: 44px; height: 44px; object-fit: cover; flex-shrink: 0;
+  border: 1px solid var(--rule); background: var(--paper-deep);
+}
+.upload-empty {
+  width: 44px; height: 44px; flex-shrink: 0;
+  display: grid; place-items: center;
+  border: 1px solid var(--rule); color: var(--faint);
+  font-family: var(--mono); font-size: 1rem;
+}
+.upload-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.upload-title { font-size: var(--t-small); color: var(--ink); }
+.upload-meta { font-family: var(--mono); font-size: var(--t-micro); color: var(--faint); }
+.upload-clear {
+  flex-shrink: 0; font-family: var(--mono); font-size: var(--t-micro);
+  color: var(--muted); border: 1px solid var(--rule); padding: 5px 9px;
+  transition: color var(--dur-fast), border-color var(--dur-fast);
+}
+.upload-clear:hover { color: var(--accent); border-color: var(--accent); }
+.upload-cover .upload-preview { width: 84px; height: 44px; }
+.upload-cover .upload-empty { width: 84px; }
+
 /* ---------- 本地模式提示条 ---------- */
 .mode-bar {
   border-bottom: 1px solid var(--rule);
