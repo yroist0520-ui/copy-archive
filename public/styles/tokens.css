@@ -48,12 +48,14 @@
   --shadow-glass: 0 10px 34px rgba(30, 30, 26, 0.058), inset 0 1px 0 rgba(255, 255, 255, 0.58);
 
   /* ---------- 字体 ---------- */
-  --font-sans: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI',
-    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
-  --font-display: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI',
-    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  /* 标题：Bodoni Moda（拉丁）+ 思源宋体（中文） */
+  --font-display: 'Bodoni Moda', 'Noto Serif SC', 'Songti SC', 'STSong', Georgia, serif;
+  /* 正文：思源宋体 */
+  --font-serif: 'Noto Serif SC', 'Source Serif 4', 'Songti SC', 'STSong', Georgia, serif;
+  /* 界面默认：跟随正文的衬线 */
+  --font-sans: 'Noto Serif SC', 'Songti SC', 'STSong', Georgia, serif;
+  /* 编号、时间戳与元信息：等宽 */
   --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  --font-serif: var(--font-sans);
 
   /* ---------- 字号 ---------- */
   --t-hero: clamp(2.5rem, 6.2vw, 5.2rem);
@@ -61,7 +63,7 @@
   --t-h2: clamp(1.18rem, 1.8vw, 1.5rem);
   --t-h3: 1.03rem;
   --t-body: 0.95rem;
-  --t-copy: 0.95rem;
+  --t-copy: 1rem;
   --t-small: 0.8125rem;
   --t-micro: 0.6875rem;
 

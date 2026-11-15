@@ -9,8 +9,8 @@ body {
   font-family: var(--font-sans);
   font-size: var(--t-body);
   font-weight: 400;
-  line-height: 1.75;
-  letter-spacing: 0.005em;
+  line-height: 1.8;
+  letter-spacing: 0.012em;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -60,7 +60,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
   font-family: var(--font-mono); font-size: var(--t-micro); color: var(--accent);
   letter-spacing: 0.16em; text-transform: uppercase; font-weight: 500;
 }
-.section-title { font-family: var(--font-display); font-size: var(--t-h2); letter-spacing: -0.02em; font-weight: 500; }
+.section-title { font-family: var(--font-display); font-size: var(--t-h2); letter-spacing: -0.02em; font-weight: 400; }
 .section-note { font-family: var(--font-mono); font-size: var(--t-micro); color: var(--faint); margin-left: auto; white-space: nowrap; letter-spacing: 0.04em; }
 .section-head::after { content: ""; flex: 1; height: 1px; background: var(--line); order: 2; margin-left: var(--s2); }
 .section-note { order: 3; }
