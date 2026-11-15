@@ -5,7 +5,7 @@ import {
 import { categoryChips, bindChips } from './ui.js';
 
 export function openDetail(item) {
-  const cats = (item.categories || []).map((c) => `<span class="chip"><span class="cat-dot" style="background:${esc(c.color)}"></span>${esc(c.name)}</span>`).join('');
+  const cats = (item.categories || []).map((c) => `<span class="chip" style="--cat-color:${esc(c.color)}"><span class="cat-dot" style="background:${esc(c.color)}"></span>${esc(c.name)}</span>`).join('');
   const tags = (item.tags || []).map((t) => `<span class="tag">${esc(t)}</span>`).join('');
   const own = state.user && Number(item.ownerId) === state.user.id;
   openModal({
@@ -22,8 +22,8 @@ export function openDetail(item) {
         <div><dt>备注</dt><dd>${esc(item.note || '—')}</dd></div>
       </dl>`,
     foot: `
-      <button class="btn btn-sm" data-copy>⧉ 复制正文</button>
-      ${own ? '<button class="btn btn-sm" data-edit>✎ 编辑</button>' : ''}
+      <button class="btn btn-sm" data-copy>复制正文</button>
+      ${own ? '<button class="btn btn-sm" data-edit>编辑</button>' : ''}
       <button class="btn btn-sm" data-close>关闭</button>`,
     onMount(root, close) {
       root.querySelector('[data-close]').onclick = close;
@@ -31,7 +31,8 @@ export function openDetail(item) {
         const ok = await copyText(item.content);
         if (!ok) { toast('复制失败', 'error'); return; }
         try { await api(`/api/copies/${item.id}/copy`, { method: 'POST', body: {}, quiet: true }); } catch { /* 忽略 */ }
-        e.target.textContent = '✓ 已复制';
+        e.target.textContent = '已复制';
+        e.target.classList.add('copied');
         toast('已复制文案正文');
       };
       root.querySelector('[data-edit]')?.addEventListener('click', () => { close(); openEditById(item.id); });
