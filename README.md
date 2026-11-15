@@ -54,41 +54,76 @@ python3 scripts/backup.py
 生成 `backups/copyarchive-YYYYMMDD-HHMMSS.db`，自动只保留最近 30 份。恢复时停服后用备份文件覆盖
 `data/copyarchive.db` 再启动即可。
 
+## GitHub Pages 部署
+
+线上地址：**https://yroist0520-ui.github.io/copy-archive/**
+
+仓库 `yroist0520-ui/copy-archive` 采用 **gh-pages 分支**方式部署（`main` 存源码，`gh-pages` 存构建产物）。
+这是因为 GitHub Pages 只能托管静态文件，无法运行 Python 后端。
+
+> 注：`main` 分支同时保留了 `.github/workflows/deploy-pages.yml`。若使用带 `workflow` scope 的
+> Personal Access Token，可切换为 Actions 自动部署；当前 PAT 权限不足，故默认走 gh-pages 分支。
+
+### 两种运行形态
+
+| 形态 | 入口 | 数据存储 | 账号隔离 | 跨设备同步 | 分享链接 |
+|---|---|---|---|---|---|
+| **完整版** | `python3 server.py` | SQLite 真数据库 | 服务端强制 | 支持 | 支持真实跨用户访问 |
+| **静态托管版**（GitHub Pages） | 线上域名 | 浏览器 localStorage | 单浏览器内模拟 | 不支持 | 仅当前浏览器内生效 |
+
+静态托管版由 `public/js/local-api.js` 提供与 `server.py` **完全一致的 API 契约**（账号隔离、多分类关联、
+搜索、收藏、三档隐私全部按后端同一套规则实现），前端启动时探测 `/api/health`，探测不到即自动切换。
+界面顶部持续显示 `LOCAL MODE` 标识，明确告知数据保存在当前浏览器，不会伪装成已联网同步。
+
+### 部署路径适配
+
+应用通过 `import.meta.url` 推导自身根路径（`BASE`），因此根路径部署（`/`）与子路径部署
+（`/copy-archive/`）都能正确解析资源与路由。`404.html` 通过逐级向上探测 `index.html` 定位应用根，
+深链（如 `/u/用户名`、`/archive`）刷新后自动回到入口并恢复路由。
+
 ## 测试
 
 ```bash
-python3 scripts/test_api.py
+python3 scripts/test_api.py          # 后端 API 集成测试
+node scripts/test_ui.mjs             # 浏览器 UI 冒烟测试（需 headless Chromium）
+node scripts/test_live.mjs           # 线上端到端验收
 ```
 
-覆盖 40 项：注册登录、会话保持、30 个默认分类、多分类关联去重、分类改名同步、完全重复检测、
+覆盖范围：注册登录、会话保持、30 个默认分类、多分类关联去重、分类改名同步、完全重复检测、
 批量导入原文无损（空格/标点/Unicode/换行）、正文/标题/分类/标签/多关键词搜索、多分类筛选、
 复制计数、收藏与取消收藏、三档隐私、跨账号越权拦截、批量管理、删除分类保留文案、
-重新登录持久化、分页与五种排序。当前结果：**41/41 通过**。
+重新登录持久化、分页与五种排序。
 
-浏览器端冒烟测试（需本机可用的 headless Chromium，先以 `--remote-debugging-port=9222` 启动）：
+| 环境 | 结果 |
+|---|---|
+| 后端 API 集成测试 | **41/41 通过** |
+| UI 冒烟 · Python 后端服务器模式 | **26/26 通过** |
+| UI 冒烟 · 根路径静态托管 | **28/28 通过** |
+| UI 冒烟 · 子路径静态托管 | **28/28 通过** |
+| UI 冒烟 · **线上站点** | **28/28 通过** |
+| 线上端到端验收 | **12/12 通过** |
+
+复现静态托管环境：
 
 ```bash
-node scripts/test_ui.mjs
+python3 scripts/serve_static.py 8080                                    # 根路径
+CA_BASE_PATH=/copy-archive python3 scripts/serve_static.py 8081          # 子路径
+CA_BASE=http://127.0.0.1:8081/copy-archive CA_EXPECT_LOCAL=1 node scripts/test_ui.mjs
 ```
-
-覆盖首页渲染、注册登录、单条/批量上传、原文保留、多分类、搜索高亮、长文折叠、批量选择/复制、
-分类管理、档案设置、公开分享与访客复制，当前 **26/26 项通过**，且无浏览器运行时错误。
-
-## GitHub Pages
-
-`.github/workflows/deploy-pages.yml` 会在 push 时部署 `public/` 静态前端，`404.html` 负责深链回退。
-注意：GitHub Pages 只能托管静态文件，**账号与数据库 API 需要运行 `server.py`**；仅部署前端时注册/登录
-不可用。完整体验请本地运行 Python 服务，或将后端部署到支持 Python 的托管环境后配置同源访问。
 
 ## 目录
 
 ```
-server.py                 后端 API + SQLite
-public/index.html         单页应用外壳
-public/styles/            设计令牌 / 基础层 / 组件层
-public/js/core.js         API、路由、状态、弹层、复制
-public/js/ui.js           卡片、分类 chip、空状态、分页
-public/js/*.js            各页面
-scripts/test_api.py       集成测试
-scripts/backup.py         数据库备份
+server.py                     后端 API + SQLite
+public/index.html             单页应用外壳
+public/styles/                设计令牌 / 基础层 / 组件层
+public/js/core.js             API、路由、基路径推导、状态、弹层、复制
+public/js/local-api.js        静态托管降级：与后端同契约的本地实现
+public/js/ui.js               卡片、分类 chip、空状态、分页
+public/js/*.js                各页面
+scripts/test_api.py           后端集成测试
+scripts/test_ui.mjs           浏览器 UI 冒烟测试
+scripts/test_live.mjs         线上端到端验收
+scripts/serve_static.py       模拟 Pages 托管（含子路径）
+scripts/backup.py             数据库备份
 ```

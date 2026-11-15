@@ -41,7 +41,13 @@ async function evaluate(expression) {
 }
 async function go(path) {
   await send('Page.navigate', { url: BASE + path });
-  await sleep(1200);
+  // 等待应用完成首屏渲染：模块加载（含远端字体）可能较慢，固定等待易误判
+  for (let i = 0; i < 50; i += 1) {
+    await sleep(150);
+    const ready = await evaluate(`document.readyState === 'complete' && !!document.querySelector('#app > *')`);
+    if (ready) break;
+  }
+  await sleep(350);
 }
 await send('Runtime.enable');
 await send('Page.enable');
