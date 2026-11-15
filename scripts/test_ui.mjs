@@ -63,7 +63,8 @@ check('首页渲染搜索区', await evaluate(`!!document.querySelector('#home-q
 check('首页渲染分类网格', await evaluate(`document.querySelectorAll('.category-tile').length >= 10`));
 check('首页渲染推荐/热门区块', await evaluate(`document.querySelectorAll('.section').length >= 5`));
 if (process.env.CA_EXPECT_LOCAL === '1') {
-  check('静态托管时显示本地模式标识', await evaluate(`!!document.querySelector('#mode-badge:not([hidden])')`));
+  check('静态托管时页脚显示本地模式说明', await evaluate(`!!document.querySelector('.mode-foot')`));
+  check('顶部不再出现本地模式横幅', await evaluate(`!document.querySelector('#mode-badge')`));
   check('本地模式数据确实落在浏览器', await evaluate(`!!localStorage.getItem('ca_local_db_v1')`));
 }
 
