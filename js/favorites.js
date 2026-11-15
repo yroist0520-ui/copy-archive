@@ -17,7 +17,7 @@ export function registerFavorites() {
         <div class="section-head reveal"><span class="section-index">SAVED</span><h1 class="section-title">我的收藏</h1><span class="section-note" id="fav-count">— 条</span></div>
         <div class="toolbar reveal d1">
           <div class="toolbar-group"><span class="toolbar-label">分类筛选</span><select class="select" id="fav-cat"><option value="">全部分类</option>${state.categories.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div>
-          <div class="toolbar-group" style="margin-left:auto"><button class="btn btn-sm" id="fav-copy-all">⧉ 复制全部收藏</button></div>
+          <div class="toolbar-group" style="margin-left:auto"><button class="btn btn-sm" id="fav-copy-all">复制全部收藏</button></div>
         </div>
         <div id="fav-content"></div><div id="fav-pager"></div>
       </div>`;
