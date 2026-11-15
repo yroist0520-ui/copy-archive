@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="paper">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="COPY ARCHIVE — 个人文案档案馆。收集、整理、复制与分享属于你的文字。">
+  <meta name="theme-color" content="#f5f3ee">
+  <title>COPY ARCHIVE — 个人文案档案馆</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,600&family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+SC:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles/tokens.css">
+  <link rel="stylesheet" href="/styles/base.css">
+  <link rel="stylesheet" href="/styles/app.css">
+</head>
+<body>
+  <a class="sr-only" href="#app">跳到主要内容</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="/" data-link>
+        <span class="brand-mark">CA</span>
+        <span class="brand-name">COPY ARCHIVE</span>
+      </a>
+      <nav class="main-nav" aria-label="主导航">
+        <a class="nav-link" href="/" data-link>首页</a>
+        <a class="nav-link" href="/archive" data-link>文案库</a>
+        <a class="nav-link" href="/categories" data-link>分类</a>
+        <a class="nav-link" href="/discover" data-link>发现</a>
+        <a class="nav-link" href="/profile" data-link>我的档案</a>
+      </nav>
+      <div class="header-actions">
+        <button class="icon-btn" id="global-search" title="搜索文案" aria-label="搜索文案">⌕</button>
+        <a class="btn btn-sm btn-primary" href="/upload" data-link>＋ 上传</a>
+        <button class="icon-btn mobile-toggle" id="mobile-toggle" aria-label="展开菜单" aria-expanded="false">☰</button>
+        <button class="btn btn-sm" id="auth-btn">登录</button>
+      </div>
+    </div>
+    <nav class="mobile-nav" id="mobile-nav" aria-label="移动导航" hidden>
+      <a href="/" data-link>首页 / HOME</a>
+      <a href="/archive" data-link>文案库 / ARCHIVE</a>
+      <a href="/upload" data-link>上传 / UPLOAD</a>
+      <a href="/categories" data-link>分类 / CATEGORIES</a>
+      <a href="/favorites" data-link>我的收藏 / SAVED</a>
+      <a href="/discover" data-link>发现 / DISCOVER</a>
+      <a href="/profile" data-link>我的档案 / PROFILE</a>
+    </nav>
+  </header>
+
+  <main id="app" tabindex="-1"></main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <span>COPY ARCHIVE © <span id="year"></span> — A PERSONAL TEXT ARCHIVE</span>
+      <span class="mono">KEEP WHAT MATTERS. <span class="accent">■</span></span>
+    </div>
+  </footer>
+
+  <div class="toast-host" id="toast-host" aria-live="polite"></div>
+  <div id="modal-host"></div>
+
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>
