@@ -24,6 +24,9 @@ img { max-width: 100%; display: block; }
 ul, ol { margin: 0; padding: 0; list-style: none; }
 ::selection { background: var(--accent); color: var(--on-accent); }
 
+/* hidden 属性必须胜过作者样式中的 display 声明（如 img { display: block }） */
+[hidden] { display: none !important; }
+
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 :focus:not(:focus-visible) { outline: none; }
 
