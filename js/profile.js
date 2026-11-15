@@ -5,6 +5,7 @@ import {
 } from './core.js';
 import { copyGrid, bindCopyCards, emptyState, categoryChips, bindChips, pagination } from './ui.js';
 import { openDetail } from './detail.js';
+import { bindImageSlot } from './image.js';
 
 const PRIVACY_LABEL = { public: '完全公开', partial: '部分公开', private: '仅自己可见' };
 
@@ -50,9 +51,25 @@ export function registerProfile() {
           <div class="section-head reveal"><span class="section-index">01</span><h2 class="section-title">Settings</h2><span class="section-note">外观、资料与公开范围</span></div>
           <div class="form-grid reveal d1">
             <div class="field"><label class="field-label">昵称</label><input class="input" id="p-name" value="${esc(me.displayName)}"></div>
-            <div class="field"><label class="field-label">头像图片链接</label><input class="input" id="p-avatar" value="${esc(me.avatarUrl || '')}" placeholder="https://…"></div>
+            <div class="field"><label class="field-label">头像</label>
+              <div class="upload-slot upload-avatar" id="p-avatar-slot">
+                <input type="file" id="p-avatar-file" accept="image/*" hidden>
+                <img class="upload-preview" alt="头像预览">
+                <span class="upload-empty" aria-hidden="true">＋</span>
+                <span class="upload-body"><span class="upload-title">点击选择头像图片</span><span class="upload-meta">支持 JPG / PNG / WebP，浏览器本地压缩后保存</span></span>
+                <button type="button" class="upload-clear">移除</button>
+              </div>
+            </div>
             <div class="field full"><label class="field-label">个人简介</label><textarea class="input" id="p-bio" rows="3">${esc(me.bio || '')}</textarea></div>
-            <div class="field full"><label class="field-label">档案封面图片链接</label><input class="input" id="p-cover" value="${esc(me.coverUrl || '')}" placeholder="https://…"></div>
+            <div class="field full"><label class="field-label">档案封面</label>
+              <div class="upload-slot upload-cover" id="p-cover-slot">
+                <input type="file" id="p-cover-file" accept="image/*" hidden>
+                <img class="upload-preview" alt="封面预览">
+                <span class="upload-empty" aria-hidden="true">＋</span>
+                <span class="upload-body"><span class="upload-title">点击选择封面图片</span><span class="upload-meta">建议宽高比 16:5，会自动居中裁剪并压缩</span></span>
+                <button type="button" class="upload-clear">移除</button>
+              </div>
+            </div>
             <div class="field full"><label class="field-label">档案主题</label>
               <div class="segmented"><button data-theme-set="paper" class="${me.theme === 'paper' ? 'active' : ''}">纸白 PAPER</button><button data-theme-set="ink" class="${me.theme === 'ink' ? 'active' : ''}">墨黑 INK</button><button data-theme-set="newsprint" class="${me.theme === 'newsprint' ? 'active' : ''}">新闻纸 NEWSPRINT</button></div></div>
           </div>
@@ -91,6 +108,28 @@ export function registerProfile() {
       </div>`;
 
     let themeChoice = me.theme;
+    let avatarValue = me.avatarUrl || '';
+    let coverValue = me.coverUrl || '';
+
+    // 头像与封面：本地选择图片 → 浏览器压缩 → 保存
+    bindImageSlot(app.querySelector('#p-avatar-slot'), {
+      value: avatarValue,
+      maxWidth: 256,
+      maxHeight: 256,
+      crop: true,
+      onChange: (v) => { avatarValue = v; },
+      onStatus: (msg, kind) => toast(msg, kind),
+    });
+    bindImageSlot(app.querySelector('#p-cover-slot'), {
+      value: coverValue,
+      maxWidth: 1600,
+      maxHeight: 500,
+      crop: true,
+      quality: 0.8,
+      onChange: (v) => { coverValue = v; },
+      onStatus: (msg, kind) => toast(msg, kind),
+    });
+
     app.querySelectorAll('[data-theme-set]').forEach((btn) => btn.addEventListener('click', () => {
       themeChoice = btn.dataset.themeSet;
       app.querySelectorAll('[data-theme-set]').forEach((b) => b.classList.toggle('active', b === btn));
@@ -104,13 +143,32 @@ export function registerProfile() {
           method: 'PUT',
           body: {
             displayName: app.querySelector('#p-name').value,
-            avatarUrl: app.querySelector('#p-avatar').value,
+            avatarUrl: avatarValue,
             bio: app.querySelector('#p-bio').value,
-            coverUrl: app.querySelector('#p-cover').value,
+            coverUrl: coverValue,
             theme: themeChoice,
           },
         });
         await refreshSession(); updateAuthButton();
+        // 即时反映到页面顶部，无需刷新
+        const box = app.querySelector('.profile-head .avatar');
+        if (box) {
+          box.innerHTML = avatarValue
+            ? `<img src="${esc(avatarValue)}" alt="头像" onerror="this.remove()">`
+            : esc((app.querySelector('#p-name').value || '?').slice(0, 1).toUpperCase());
+        }
+        const strip = app.querySelector('.cover-strip');
+        if (coverValue) {
+          if (strip) strip.style.backgroundImage = `url('${coverValue}')`;
+          else {
+            const el = document.createElement('div');
+            el.className = 'cover-strip';
+            el.style.backgroundImage = `url('${coverValue}')`;
+            app.querySelector('.profile-hero').prepend(el);
+          }
+        } else if (strip) {
+          strip.remove();
+        }
         toast('档案设置已保存');
       } catch { /* 已提示 */ } finally { e.target.disabled = false; }
     });
