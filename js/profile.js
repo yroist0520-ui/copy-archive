@@ -82,7 +82,7 @@ export function registerProfile() {
             <div class="field full"><label class="field-label">公开模式</label>
               <div class="check-grid" style="grid-template-columns:repeat(3,1fr);max-height:none">
                 ${[['public', '完全公开', '所有文案与分类均可浏览'], ['partial', '部分公开', '只公开下方勾选的分类'], ['private', '仅自己可见', '档案不对外开放']].map(([v, label, desc]) => `
-                  <label class="check-item" style="display:block;padding:14px"><input type="radio" name="privacy" value="${v}" ${me.privacy === v ? 'checked' : ''} style="margin-right:8px"><b>${label}</b><div class="field-hint" style="margin:6px 0 0 22px">${desc}</div></label>`).join('')}
+                  <label class="check-item plain" style="display:block;padding:14px"><input type="radio" name="privacy" value="${v}" ${me.privacy === v ? 'checked' : ''} style="margin-right:8px"><b>${label}</b><div class="field-hint" style="margin:6px 0 0 22px">${desc}</div></label>`).join('')}
               </div>
             </div>
             <div class="field full" id="public-cat-field"><label class="field-label">公开展示的分类（部分公开模式生效）</label>
@@ -149,6 +149,7 @@ export function registerProfile() {
             theme: themeChoice,
           },
         });
+        localStorage.setItem('ca_theme', themeChoice);
         await refreshSession(); updateAuthButton();
         // 即时反映到页面顶部，无需刷新
         const box = app.querySelector('.profile-head .avatar');
@@ -231,7 +232,7 @@ export function registerProfile() {
           <div class="search-meta"><span id="pub-count">共 ${profile.copyCount} 条公开文案</span><span class="search-hint">支持分类名、标签与关键词</span></div>
           <div class="chip-row reveal d1" style="margin-top:20px">
             <button class="chip active" data-pub-cat="">全部</button>
-            ${categories.map((c) => `<button class="chip" data-pub-cat="${c.id}"><span class="cat-dot" style="background:${esc(c.color)}"></span>${esc(c.name)} · ${c.count}</button>`).join('')}
+            ${categories.map((c) => `<button class="chip" data-pub-cat="${c.id}" style="--cat-color:${esc(c.color)}"><span class="cat-dot" style="background:${esc(c.color)}"></span>${esc(c.name)} · ${c.count}</button>`).join('')}
           </div>
           <div id="pub-content" style="margin-top:28px"></div><div id="pub-pager"></div>
         </section>
