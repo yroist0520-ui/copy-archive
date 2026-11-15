@@ -57,9 +57,8 @@ export function registerHome() {
           ${grouped.length ? grouped.map((g, i) => `
             <div class="group-label reveal d${Math.min(i + 1, 5)}">${esc(g.group)} — ${String(g.items.length).padStart(2, '0')} ITEMS</div>
             <div class="category-grid reveal">${g.items.slice(0, 10).map((c) => `
-              <button class="category-tile" data-cat-tile="${c.id}">
-                <div class="category-tile-top"><span class="cat-dot" style="background:${esc(c.color)}"></span>${esc(g.group.slice(0, 2))}</div>
-                <div><div class="category-tile-name">${esc(c.name)}</div><div class="category-tile-count">${c.count} 条文案 ↗</div></div>
+              <button class="category-tile" data-cat-tile="${c.id}" style="--cat-color:${esc(c.color)}">
+                <div class="category-tile-top"><span class="cat-dot" style="background:${esc(c.color)}"></span>${esc(g.group.slice(0, 2))}</div>                <div><div class="category-tile-name">${esc(c.name)}</div><div class="category-tile-count">${c.count} 条文案 ↗</div></div>
               </button>`).join('')}</div>`).join('')
             : `<div class="category-grid">${['INS','韩系','暗黑','怪诞','古风','少女','可爱','萌物','复古','清冷','高级感','治愈','赛博朋克','哥特','短句','水印','亮晶晶','实拍','朋友圈','个性签名'].map((n) => `<div class="category-tile"><div class="category-tile-top">PRESET</div><div><div class="category-tile-name">${n}</div><div class="category-tile-count">注册后启用</div></div></div>`).join('')}</div>`}
         </section>

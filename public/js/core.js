@@ -248,13 +248,25 @@ export async function refreshSession() {
   } catch {
     state.user = null;
   }
-  if (state.user) {
-    state.theme = state.user.theme || 'paper';
-  } else {
-    state.theme = localStorage.getItem('ca_theme') || 'paper';
-  }
+  // 手动切换过的主题优先记忆，其次沿用账号保存的主题
+  const saved = localStorage.getItem('ca_theme');
+  state.theme = saved || (state.user && state.user.theme) || 'paper';
   document.documentElement.dataset.theme = state.theme;
   updateAuthButton();
+}
+
+/** 主题清单：纸白 / 墨黑 / 新闻纸 */
+export const THEMES = [
+  { id: 'paper', label: '纸白' },
+  { id: 'ink', label: '墨黑' },
+  { id: 'newsprint', label: '新闻纸' },
+];
+
+/** 切换主题并记忆 */
+export function applyTheme(theme, { remember = true } = {}) {
+  state.theme = theme;
+  document.documentElement.dataset.theme = theme;
+  if (remember) localStorage.setItem('ca_theme', theme);
 }
 
 export function updateAuthButton() {
@@ -447,6 +459,16 @@ export function initCore() {
     if (state.user) navigate('/profile');
     else openAuth();
   });
+  const themeBtn = document.getElementById('theme-toggle');
+  if (themeBtn) {
+    themeBtn.addEventListener('click', () => {
+      const current = document.documentElement.dataset.theme || 'paper';
+      const index = THEMES.findIndex((t) => t.id === current);
+      const next = THEMES[(index + 1) % THEMES.length];
+      applyTheme(next.id);
+      toast(`已切换到${next.label}主题`);
+    });
+  }
   const toggle = document.getElementById('mobile-toggle');
   const mobileNav = document.getElementById('mobile-nav');
   toggle.addEventListener('click', () => {

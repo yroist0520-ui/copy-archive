@@ -46,18 +46,18 @@ export function registerArchive() {
           </select></div>
           <div class="toolbar-group"><button class="chip" id="filter-fav" aria-pressed="false">☆ 仅看收藏</button></div>
           <div class="toolbar-group" style="margin-left:auto">
-            <div class="segmented"><button data-mode="grid" class="${view.mode === 'grid' ? 'active' : ''}">▦ 网格</button><button data-mode="list" class="${view.mode === 'list' ? 'active' : ''}">☰ 列表</button></div>
+            <div class="segmented"><button data-mode="grid" class="${view.mode === 'grid' ? 'active' : ''}">网格</button><button data-mode="list" class="${view.mode === 'list' ? 'active' : ''}">列表</button></div>
           </div>
         </div>
 
         <div class="toolbar hidden" id="batch-bar">
           <span class="mono" style="font-size:var(--t-small)">已选 <b id="batch-num" class="accent">0</b> 条</span>
-          <button class="btn btn-sm" data-batch="copy">⧉ 批量复制</button>
-          <button class="btn btn-sm" data-batch="favorite">★ 收藏</button>
-          <button class="btn btn-sm" data-batch="unfavorite">☆ 取消收藏</button>
-          <button class="btn btn-sm" data-batch="addcat">＋ 添加分类</button>
-          <button class="btn btn-sm" data-batch="remcat">－ 移除分类</button>
-          <button class="btn btn-sm btn-danger" data-batch="delete">✕ 删除</button>
+          <button class="btn btn-sm" data-batch="copy">批量复制</button>
+          <button class="btn btn-sm" data-batch="favorite">收藏</button>
+          <button class="btn btn-sm" data-batch="unfavorite">取消收藏</button>
+          <button class="btn btn-sm" data-batch="addcat">添加分类</button>
+          <button class="btn btn-sm" data-batch="remcat">移除分类</button>
+          <button class="btn btn-sm btn-danger" data-batch="delete">删除</button>
           <button class="link-btn" data-batch="clear" style="margin-left:auto">取消选择</button>
         </div>
 
@@ -206,7 +206,7 @@ export function registerArchive() {
         openModal({
           kicker: 'BATCH CATEGORY', title: action === 'addcat' ? '批量添加分类' : '批量移除分类',
           body: `<p class="field-hint" style="margin-bottom:12px">可多选。移除分类不会删除文案。</p>
-                 <div class="check-grid">${state.categories.map((c) => `<label class="check-item"><input type="checkbox" value="${c.id}"><span class="cat-dot" style="background:${esc(c.color)}"></span>${esc(c.name)}</label>`).join('')}</div>`,
+                 <div class="check-grid">${state.categories.map((c) => `<label class="check-item" style="--cat-color:${esc(c.color)}"><input type="checkbox" value="${c.id}"><span class="cat-dot" style="background:${esc(c.color)}"></span>${esc(c.name)}</label>`).join('')}</div>`,
           foot: '<button class="btn btn-sm" data-cancel>取消</button><button class="btn btn-sm btn-primary" data-ok>确认</button>',
           onMount(root, close) {
             root.querySelector('[data-cancel]').onclick = close;

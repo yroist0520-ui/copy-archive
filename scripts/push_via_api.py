@@ -91,6 +91,7 @@ def git_changed_files():
 
 def main():
     branch = sys.argv[1] if len(sys.argv) > 1 else "main"
+    explicit = sys.argv[2] if len(sys.argv) > 2 else ""
     if not TOKEN:
         print("需要环境变量 GH_TOKEN")
         return 1
@@ -105,7 +106,9 @@ def main():
                 full = os.path.join(base, name)
                 rel = os.path.relpath(full, public)
                 targets.append(rel)
-        targets.append(".nojekyll")
+    elif explicit:
+        # 显式指定文件，逗号分隔（走 API 推送后本地 origin/main 引用不会同步）
+        targets = [p.strip() for p in explicit.split(",") if p.strip()]
     else:
         targets = git_changed_files()
 
