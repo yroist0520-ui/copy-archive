@@ -18,7 +18,7 @@ export function registerCategories() {
           <span class="section-note">${state.categories.length} 个分类 · 一条文案可属于多个分类</span></div>
         <div class="notice reveal d1">删除分类只会解除它与文案的关联，<strong>不会删除任何文案</strong>。自定义分类可改名、改色和调整顺序。</div>
         <div class="toolbar reveal d1"><div class="toolbar-group"><input class="input" id="cat-new" placeholder="新分类名称" style="width:220px">
-          <input type="color" id="cat-color" value="#b23a2b" style="width:42px;height:40px;border:1px solid var(--rule-strong);background:var(--surface);padding:2px" aria-label="分类颜色"></div>
+          <input type="color" id="cat-color" value="#b23a2b" class="color-input" aria-label="分类颜色"></div>
           <button class="btn btn-sm btn-primary" id="cat-create">＋ 新建分类</button></div>
         <div id="cat-list" class="reveal d2"></div>
       </div>`;
@@ -29,20 +29,20 @@ export function registerCategories() {
       state.categories.forEach((c) => { (groups[c.group] ||= []).push(c); });
       host.innerHTML = Object.entries(groups).map(([group, list]) => `
         <div class="group-label">${esc(group)} — ${String(list.length).padStart(2, '0')}</div>
-        <div class="manage-row mono faint" style="font-size:var(--t-micro);border-bottom:1px solid var(--ink)">
+        <div class="manage-row manage-head mono faint" style="font-size:var(--t-micro)">
           <span></span><span>分类名称</span><span>配色</span><span>文案数量</span><span style="text-align:right">操作</span>
         </div>
         ${list.map((c, i) => `
           <div class="manage-row" data-id="${c.id}">
             <span class="mono faint">${String(i + 1).padStart(2, '0')}</span>
-            <button class="cat-name" style="text-align:left" data-view="${c.id}"><span class="cat-dot" style="display:inline-block;width:8px;height:8px;background:${esc(c.color)};margin-right:8px"></span>${esc(c.name)}</button>
-            <span><input type="color" value="${esc(c.color)}" data-color="${c.id}" style="width:34px;height:26px;border:1px solid var(--rule);background:none;padding:0" aria-label="修改颜色"></span>
+            <button class="cat-name" style="text-align:left;--cat-color:${esc(c.color)}" data-view="${c.id}"><span class="cat-dot" style="display:inline-block;width:8px;height:8px;background:${esc(c.color)};margin-right:8px"></span>${esc(c.name)}</button>
+            <span><input type="color" value="${esc(c.color)}" data-color="${c.id}" class="color-input color-input-sm" aria-label="修改颜色"></span>
             <a class="mono link-btn" href="/archive?category=${c.id}" data-link>${c.count} 条 ↗</a>
             <div class="manage-actions">
-              <button class="move-btn" data-move="up" title="上移">↑</button>
-              <button class="move-btn" data-move="down" title="下移">↓</button>
-              <button class="move-btn" data-edit="${c.id}" title="改名">✎</button>
-              <button class="move-btn" data-del="${c.id}" title="删除">✕</button>
+              <button class="move-btn" data-move="up" title="上移" aria-label="上移"></button>
+              <button class="move-btn" data-move="down" title="下移" aria-label="下移"></button>
+              <button class="move-btn" data-edit="${c.id}" title="改名" aria-label="改名"></button>
+              <button class="move-btn" data-del="${c.id}" title="删除" aria-label="删除"></button>
             </div>
           </div>`).join('')}`).join('');
     }
