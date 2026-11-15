@@ -702,8 +702,9 @@ async function handle(db, method, path, query, body) {
     const profile = getProfile(db, me.id);
     const displayName = cleanText(body.displayName === undefined ? profile.displayName : body.displayName, '昵称', { required: true, maxLen: 40 });
     const bio = cleanText(body.bio === undefined ? profile.bio : body.bio, '简介', { maxLen: 500 });
-    const avatarUrl = cleanText(body.avatarUrl === undefined ? profile.avatarUrl : body.avatarUrl, '头像', { maxLen: 500 });
-    const coverUrl = cleanText(body.coverUrl === undefined ? profile.coverUrl : body.coverUrl, '封面', { maxLen: 500 });
+    // 头像与封面为浏览器端压缩后的 data URL，容量远大于普通链接
+    const avatarUrl = cleanText(body.avatarUrl === undefined ? profile.avatarUrl : body.avatarUrl, '头像', { maxLen: 400000 });
+    const coverUrl = cleanText(body.coverUrl === undefined ? profile.coverUrl : body.coverUrl, '封面', { maxLen: 600000 });
     const theme = body.theme === undefined ? profile.theme : body.theme;
     if (!['paper', 'ink', 'newsprint'].includes(theme)) throw new LocalApiError(400, '主题不正确');
     const privacy = body.privacy === undefined ? profile.privacy : body.privacy;
