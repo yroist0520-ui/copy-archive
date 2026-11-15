@@ -5,3 +5,6 @@ __pycache__/
 *.pyc
 .DS_Store
 node_modules/
+
+# 工作流需 workflow scope 权限，默认由 gh-pages 分支方式部署 Pages
+.github/workflows/deploy-pages.yml
