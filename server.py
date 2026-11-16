@@ -236,14 +236,63 @@ OFFICIAL_USERNAME = "official"
 OFFICIAL_EMAIL = "official@copyarchive.local"
 
 
+def ensure_sample_categories(conn, user_id):
+    """按 samples.json 的分组为用户补建缺失的分类（幂等），返回新建数量。
+
+    用于官方公开档案：示例库扩充后（如新增「蕾丝」分类），已存在的官方账号
+    也能在下次启动时自动补齐新分类，不触碰任何个人用户的分类。"""
+    library = load_samples()
+    owned = {
+        r["name"]
+        for r in conn.execute("SELECT name FROM categories WHERE user_id = ?", (user_id,))
+    }
+    row = conn.execute(
+        "SELECT COALESCE(MAX(sort_order), 0) AS m FROM categories WHERE user_id = ?", (user_id,)
+    ).fetchone()
+    order = row["m"]
+    created = 0
+    for grp in library.get("groups", []):
+        gname = grp.get("group") or "其他类"
+        for item in grp.get("items", []):
+            name = item.get("name")
+            if not name or name in owned:
+                continue
+            order += 1
+            conn.execute(
+                "INSERT OR IGNORE INTO categories (user_id, name, group_name, color, sort_order, is_default, created_at) "
+                "VALUES (?, ?, ?, ?, ?, 0, ?)",
+                (user_id, name, gname, GROUP_COLORS.get(gname, GROUP_COLORS["自定义"]), order, now_iso()),
+            )
+            owned.add(name)
+            created += 1
+    return created
+
+
 def seed_official_archive(conn):
     """内置「官方精选」公开档案。
 
     公开档案不需要登录注册——任何访客在发现页/直接链接都能浏览、搜索、复制
     这里的示例文案。账号密码随机生成且从不颁发会话，等于无人可登录，
     只作为公开内容的载体存在；用户名提前占位，防止被抢注。
+    official 已存在时做增量补录：补建示例库新增分类、填充新增文案（均幂等），
+    只写 official 账号，不碰任何个人用户的档案。
     """
-    if conn.execute("SELECT 1 FROM users WHERE username = ? COLLATE NOCASE", (OFFICIAL_USERNAME,)).fetchone():
+    existing = get_user_by_username(conn, OFFICIAL_USERNAME)
+    if existing:
+        uid = existing["id"]
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            added_cats = ensure_sample_categories(conn, uid)
+            created, _ = seed_sample_copies(conn, uid)
+            conn.execute("COMMIT")
+            if created or added_cats:
+                print(
+                    "topped up official archive: {} categories, {} entries".format(added_cats, created),
+                    flush=True,
+                )
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
         return False
     conn.execute("BEGIN IMMEDIATE")
     cur = conn.execute(
@@ -257,11 +306,12 @@ def seed_official_archive(conn):
         (
             uid,
             "官方精选 Official",
-            "内置示例文案库：中英韩多语种金句，覆盖 30 个分类。无需登录注册，浏览、搜索、复制随意取用——喜欢就收藏进你自己的档案。",
+            "内置示例文案库：中英韩多语种金句，覆盖 31 个分类。无需登录注册，浏览、搜索、复制随意取用——喜欢就收藏进你自己的档案。",
             now_iso(),
         ),
     )
     seed_defaults(conn, uid)
+    ensure_sample_categories(conn, uid)
     created, _ = seed_sample_copies(conn, uid)
     conn.execute("COMMIT")
     print("seeded official archive: {} entries".format(created), flush=True)
