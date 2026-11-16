@@ -2,11 +2,13 @@
 import {
   state, api, route, esc, fmtDate, openAuth, toast, copyText,
   loadCategories, debounce, refreshSession, updateAuthButton, renderRoute, BASE,
-  loadSamples, seedSampleEntries, SHARE_CODE, FULL_VERSION_URL, currentQuery,
+  loadSamples, seedSampleEntries, SHARE_CODE, FULL_VERSION_URL, currentQuery, openModal,
 } from './core.js';
 import { copyGrid, bindCopyCards, emptyState, categoryChips, bindChips, pagination } from './ui.js';
 import { openDetail } from './detail.js';
 import { bindImageSlot } from './image.js';
+import { buildContributeUrl } from './contribute.js';
+import { localApi } from './local-api.js';
 
 const PRIVACY_LABEL = { public: '完全公开', partial: '部分公开', private: '仅自己可见' };
 
@@ -107,10 +109,11 @@ export function registerProfile() {
 
         ${state.localMode ? `
         <section class="section">
-          <div class="section-head reveal"><span class="section-index">04</span><h2 class="section-title">Share</h2><span class="section-note">本地版无法分享 · 数据只在当前浏览器</span></div>
-          <div class="notice reveal d1">这是<strong>本地版</strong>：档案与文案只保存在当前设备的浏览器里，分享出去的链接别人打不开、也看不到你的文案。</div>
+          <div class="section-head reveal"><span class="section-index">04</span><h2 class="section-title">Share</h2><span class="section-note">本地版无法直接分享 · 可投稿到公开档案</span></div>
+          <div class="notice reveal d1">这是<strong>本地版</strong>：档案与文案只保存在当前设备的浏览器里，直接发链接别人看不到。两个办法把文案带给别人：<strong>投稿</strong>到完整版的公开档案馆（所有人可搜索、复制），或在完整版建立档案后分享链接。</div>
           <div class="reveal d1" style="margin-top:12px;display:flex;gap:12px;flex-wrap:wrap">
-            <a class="btn btn-sm btn-primary" href="${esc(FULL_VERSION_URL)}" target="_blank" rel="noopener">前往完整版 · 档案可分享给任何人 ↗</a>
+            <button class="btn btn-sm btn-primary" id="p-contribute">投稿到公开档案 ↗</button>
+            <a class="btn btn-sm" href="${esc(FULL_VERSION_URL)}" target="_blank" rel="noopener">打开完整版 · 建立可分享的档案</a>
             <a class="btn btn-sm" href="/archive" data-link>继续整理本地文案</a>
           </div>
         </section>` : `
@@ -232,6 +235,8 @@ export function registerProfile() {
         }
       });
     }
+    const contributeBtn = app.querySelector('#p-contribute');
+    if (contributeBtn) contributeBtn.addEventListener('click', () => openContributeModal(me));
     bindCopyCards(app.querySelector('#p-recent'), { onChanged: () => renderRoute(), onDetail: openDetail });
   });
 
@@ -335,5 +340,106 @@ export function registerProfile() {
       }
     }
     await load(1);
+  });
+}
+
+/* ---- 投稿选择弹层：本地版选全部/部分文案 → 生成投稿链接 ---- */
+
+async function openContributeModal(me) {
+  // 拉全量本地文案（pageSize 上限 100，分页取尽）
+  let all = [];
+  let page = 1;
+  try {
+    for (; page <= 20; page++) {
+      const data = await localApi(`/api/copies?page=${page}&pageSize=100&sort=newest`);
+      all = all.concat(data.items || []);
+      if (!data.hasMore || !(data.items || []).length) break;
+    }
+  } catch (err) {
+    toast(err.message || '读取本地文案失败', 'error');
+    return;
+  }
+  if (!all.length) {
+    toast('还没有文案可投稿，先去上传几条吧', 'error');
+    return;
+  }
+
+  // 按分类分组（含未分类）
+  const groups = new Map();
+  all.forEach((c) => {
+    const names = (c.categories || []).map((x) => x.name);
+    (names.length ? names : ['未分类']).forEach((n) => {
+      if (!groups.has(n)) groups.set(n, []);
+      groups.get(n).push(c);
+    });
+  });
+
+  openModal({
+    kicker: 'CONTRIBUTE',
+    title: '投稿到公开档案',
+    wide: true,
+    body: `
+      <div class="field-hint" style="margin-bottom:16px">选择要投稿的分类（默认全选）。生成投稿链接后在完整版打开、登录你的档案即可完成投稿——投稿后所有人都能在公开档案里搜索到这些文案。</div>
+      <div class="check-grid" id="ct-groups" style="max-height:260px;overflow:auto">
+        ${[...groups.entries()].map(([name, list]) => `
+          <label class="check-item plain"><input type="checkbox" data-ct-group value="${esc(name)}" checked style="margin-right:8px"><b>${esc(name)}</b><span class="field-hint" style="margin-left:8px">${list.length} 条</span></label>`).join('')}
+      </div>
+      <div style="margin-top:12px;display:flex;gap:12px;align-items:center">
+        <button class="btn btn-sm" id="ct-sel-all">全选</button>
+        <button class="btn btn-sm" id="ct-sel-none">清空</button>
+        <span class="field-hint" id="ct-count"></span>
+      </div>
+      <div id="ct-link-box" hidden style="margin-top:16px">
+        <div class="field-hint" style="margin-bottom:8px">投稿链接已生成（长链接属正常现象），复制后粘贴给浏览器打开，或直接点击按钮：</div>
+        <textarea class="input" id="ct-link" rows="4" readonly></textarea>
+      </div>`,
+    foot: `
+      <button class="btn btn-sm btn-primary" id="ct-make">生成投稿链接</button>
+      <button class="btn btn-sm" id="ct-open" hidden>打开并继续投稿 ↗</button>
+      <button class="btn btn-sm" data-close>关闭</button>`,
+    onMount(root, close) {
+      root.querySelector('[data-close]').onclick = close;
+      const boxes = [...root.querySelectorAll('[data-ct-group]')];
+      const countEl = root.querySelector('#ct-count');
+      const updateCount = () => {
+        const picked = new Set(boxes.filter((b) => b.checked).map((b) => b.value));
+        const n = all.filter((c) => {
+          const names = (c.categories || []).map((x) => x.name);
+          return (names.length ? names : ['未分类']).some((x) => picked.has(x));
+        }).length;
+        countEl.textContent = `将投稿 ${n} 条文案`;
+        return n;
+      };
+      boxes.forEach((b) => b.addEventListener('change', updateCount));
+      updateCount();
+      root.querySelector('#ct-sel-all').onclick = () => { boxes.forEach((b) => { b.checked = true; }); updateCount(); };
+      root.querySelector('#ct-sel-none').onclick = () => { boxes.forEach((b) => { b.checked = false; }); updateCount(); };
+
+      root.querySelector('#ct-make').onclick = () => {
+        const picked = new Set(boxes.filter((b) => b.checked).map((b) => b.value));
+        if (!picked.size) { toast('至少选择一个分类', 'error'); return; }
+        const entries = all
+          .filter((c) => {
+            const names = (c.categories || []).map((x) => x.name);
+            return (names.length ? names : ['未分类']).some((x) => picked.has(x));
+          })
+          .map((c) => ({
+            content: c.content,
+            title: c.title || '',
+            tags: c.tags || [],
+            categories: (c.categories || []).map((x) => x.name),
+          }));
+        const catNames = [...new Set(entries.flatMap((x) => x.categories))];
+        const url = buildContributeUrl({ v: 1, from: me.displayName, entries, categories: catNames });
+        const box = root.querySelector('#ct-link-box');
+        box.hidden = false;
+        root.querySelector('#ct-link').value = url;
+        root.querySelector('#ct-open').hidden = false;
+        root.querySelector('#ct-open').onclick = () => window.open(url, '_blank', 'noopener');
+        root.querySelector('#ct-make').textContent = '重新生成';
+        toast('投稿链接已生成，已自动复制');
+        copyText(url);
+      };
+    },
   });
 }

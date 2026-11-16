@@ -7,6 +7,7 @@ import { registerCategories } from './categories.js';
 import { registerFavorites } from './favorites.js';
 import { registerProfile } from './profile.js';
 import { registerDiscover } from './discover.js';
+import { registerContribute } from './contribute.js';
 import { maybeShowEntryGate } from './entry-gate.js';
 
 registerHome();
@@ -16,6 +17,7 @@ registerCategories();
 registerFavorites();
 registerProfile();
 registerDiscover();
+registerContribute();
 
 initCore();
 await refreshSession();
