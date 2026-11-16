@@ -24,12 +24,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 PUBLIC_DIR = ROOT / "public"
-DATA_DIR = ROOT / "data"
-DB_PATH = DATA_DIR / "copyarchive.db"
+DATA_DIR = Path(os.environ.get("COPY_ARCHIVE_DATA_DIR") or (ROOT / "data"))
+DB_PATH = Path(os.environ.get("COPY_ARCHIVE_DB") or (DATA_DIR / "copyarchive.db"))
 SESSION_MAX_AGE = 60 * 60 * 24 * 30  # 30 天
 PBKDF2_ROUNDS = 120_000
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 DEFAULT_CATEGORIES = [
     ("风格类", ["INS", "韩系", "暗黑", "怪诞", "古风", "少女", "可爱", "萌物", "复古", "清冷", "高级感", "治愈", "赛博朋克", "哥特"]),
@@ -1075,7 +1076,8 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     init_db()
     port = int(os.environ.get("PORT") or 8765)
-    host = os.environ.get("HOST") or "127.0.0.1"
+    # 部署环境（容器 / 反向代理）需要绑定 0.0.0.0，本地默认仅回环
+    host = os.environ.get("HOST") or ("0.0.0.0" if os.environ.get("PORT") else "127.0.0.1")
     server = ThreadingHTTPServer((host, port), Handler)
     print("COPY ARCHIVE running at http://{}:{}".format(host, port), flush=True)
     try:
