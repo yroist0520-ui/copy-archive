@@ -40,7 +40,7 @@ export const SHARE_CODE = new URLSearchParams(location.search).get('sharecode') 
 export const FULL_VERSION_URL = 'https://wbapp-kvp8vfjqdet5wf5ww0viai.app.workbuddy.host/?sharecode=HC3YZORW3G';
 
 /** 应用内路径 → 浏览器可访问的完整路径 */
-function appUrl(path) {
+export function appUrl(path) {
   if (!path.startsWith('/')) return path;
   const base = `${BASE_NO_SLASH}${path}`;
   if (!SHARE_CODE || base.includes('sharecode=')) return base;
