@@ -192,6 +192,82 @@ def guess_tags(text):
     return tags
 
 
+def seed_sample_copies(conn, user_id):
+    """按 public/samples.json 为指定用户填充示例文案（按分类名匹配，幂等）。"""
+    library = load_samples()
+    owned = {
+        r["name"]: r["id"]
+        for r in conn.execute("SELECT id, name FROM categories WHERE user_id = ?", (user_id,))
+    }
+    existing = {
+        r["content"]
+        for r in conn.execute("SELECT content FROM copies WHERE user_id = ?", (user_id,))
+    }
+    created = 0
+    skipped = 0
+    base_ts = datetime.now(timezone.utc)
+    step = 0
+    for grp in library.get("groups", []):
+        for item in grp.get("items", []):
+            cid = owned.get(item.get("name"))
+            if cid is None:
+                continue
+            for text in item.get("texts", []):
+                if not text or text in existing:
+                    skipped += 1
+                    continue
+                step += 1
+                ts = (base_ts - timedelta(seconds=step)).isoformat(timespec="seconds")
+                cur = conn.execute(
+                    "INSERT INTO copies (user_id, title, content, note, tags, copy_count, created_at, updated_at) "
+                    "VALUES (?, '', ?, '', ?, 0, ?, ?)",
+                    (user_id, text, json.dumps(guess_tags(text), ensure_ascii=False), ts, ts),
+                )
+                conn.execute(
+                    "INSERT OR IGNORE INTO copy_categories (copy_id, category_id) VALUES (?, ?)",
+                    (cur.lastrowid, cid),
+                )
+                existing.add(text)
+                created += 1
+    return created, skipped
+
+
+OFFICIAL_USERNAME = "official"
+OFFICIAL_EMAIL = "official@copyarchive.local"
+
+
+def seed_official_archive(conn):
+    """内置「官方精选」公开档案。
+
+    公开档案不需要登录注册——任何访客在发现页/直接链接都能浏览、搜索、复制
+    这里的示例文案。账号密码随机生成且从不颁发会话，等于无人可登录，
+    只作为公开内容的载体存在；用户名提前占位，防止被抢注。
+    """
+    if conn.execute("SELECT 1 FROM users WHERE username = ? COLLATE NOCASE", (OFFICIAL_USERNAME,)).fetchone():
+        return False
+    conn.execute("BEGIN IMMEDIATE")
+    cur = conn.execute(
+        "INSERT INTO users (username, email, password_hash, created_at) VALUES (?, ?, ?, ?)",
+        (OFFICIAL_USERNAME, OFFICIAL_EMAIL, hash_password(secrets.token_hex(24)), now_iso()),
+    )
+    uid = cur.lastrowid
+    conn.execute(
+        "INSERT INTO profiles (user_id, display_name, bio, avatar_url, cover_url, theme, privacy, public_category_ids, created_at) "
+        "VALUES (?, ?, ?, '', '', 'paper', 'public', '[]', ?)",
+        (
+            uid,
+            "官方精选 Official",
+            "内置示例文案库：中英韩多语种金句，覆盖 30 个分类。无需登录注册，浏览、搜索、复制随意取用——喜欢就收藏进你自己的档案。",
+            now_iso(),
+        ),
+    )
+    seed_defaults(conn, uid)
+    created, _ = seed_sample_copies(conn, uid)
+    conn.execute("COMMIT")
+    print("seeded official archive: {} entries".format(created), flush=True)
+    return True
+
+
 def json_loads(value, fallback):
     try:
         data = json.loads(value)
@@ -813,42 +889,7 @@ def handle_api(handler, method, path, query, conn):
 
     if path == "/api/samples/seed" and method == "POST":
         me = require_auth(handler, conn)
-        library = load_samples()
-        # 用户现有分类：按名称匹配
-        owned = {
-            r["name"]: r["id"]
-            for r in conn.execute("SELECT id, name FROM categories WHERE user_id = ?", (me["id"],))
-        }
-        existing = {
-            r["content"]
-            for r in conn.execute("SELECT content FROM copies WHERE user_id = ?", (me["id"],))
-        }
-        created = 0
-        skipped = 0
-        base_ts = datetime.now(timezone.utc)
-        step = 0
-        for grp in library.get("groups", []):
-            for item in grp.get("items", []):
-                cid = owned.get(item.get("name"))
-                if cid is None:
-                    continue
-                for text in item.get("texts", []):
-                    if not text or text in existing:
-                        skipped += 1
-                        continue
-                    step += 1
-                    ts = (base_ts - timedelta(seconds=step)).isoformat(timespec="seconds")
-                    cur = conn.execute(
-                        "INSERT INTO copies (user_id, title, content, note, tags, copy_count, created_at, updated_at) "
-                        "VALUES (?, '', ?, '', ?, 0, ?, ?)",
-                        (me["id"], text, json.dumps(guess_tags(text), ensure_ascii=False), ts, ts),
-                    )
-                    conn.execute(
-                        "INSERT OR IGNORE INTO copy_categories (copy_id, category_id) VALUES (?, ?)",
-                        (cur.lastrowid, cid),
-                    )
-                    existing.add(text)
-                    created += 1
+        created, skipped = seed_sample_copies(conn, me["id"])
         return 200, {"ok": True, "created": created, "skipped": skipped}
 
     # ---- 发现页 ----
@@ -1075,6 +1116,11 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     init_db()
+    conn = db_connect()
+    try:
+        seed_official_archive(conn)
+    finally:
+        conn.close()
     port = int(os.environ.get("PORT") or 8765)
     # 部署环境（容器 / 反向代理）需要绑定 0.0.0.0，本地默认仅回环
     host = os.environ.get("HOST") or ("0.0.0.0" if os.environ.get("PORT") else "127.0.0.1")

@@ -177,6 +177,28 @@ def main():
         _, r = call(c, "GET", f"/api/copies?sort={sort}", expect=200)
         check("排序模式 " + sort, isinstance(r["items"], list))
 
+    # 12. 官方精选档案：免登录访客可浏览与复制
+    guest = make_client()
+    _, disc = call(guest, "GET", "/api/discover", expect=200)
+    official = [a for a in disc["archives"] if a["username"] == "official"]
+    check("发现页内置官方精选档案", bool(official) and official[0]["privacy"] == "public", str(official))
+    check("官方档案文案量充足", official and official[0]["copy_count"] >= 100, str(official and official[0]["copy_count"]))
+    _, pub = call(guest, "GET", "/api/public/u/official", expect=200)
+    check("免登录读官方档案详情", pub["copyCount"] >= 100 and pub["categoryCount"] >= 20)
+    _, pubcats = call(guest, "GET", "/api/public/u/official/categories", expect=200)
+    check("免登录读官方分类", len(pubcats["items"]) >= 20)
+    _, pubcopies = call(guest, "GET", "/api/public/u/official/copies?pageSize=5", expect=200)
+    check("免登录读官方文案", pubcopies["total"] >= 100 and len(pubcopies["items"]) == 5)
+    first = pubcopies["items"][0]
+    _, pubone = call(guest, "GET", f"/api/public/copies/{first['id']}", expect=200)
+    check("免登录读官方文案详情", pubone["content"] == first["content"])
+    call(guest, "POST", f"/api/copies/{first['id']}/copy", {}, 200)
+    _, recounted = call(guest, "GET", f"/api/public/copies/{first['id']}", expect=200)
+    check("访客复制官方文案并同步计数", recounted["copyCount"] == first["copyCount"] + 1)
+    # 官方档案不可被他人修改
+    call(guest, "PUT", "/api/profile", {"bio": "hack"}, 401)
+    call(guest, "DELETE", f"/api/copies/{first['id']}", 401)
+
     passed = sum(1 for _, ok, _ in results if ok)
     print(f"\n{passed}/{len(results)} 项通过")
     return 0 if passed == len(results) else 1

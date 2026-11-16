@@ -26,7 +26,7 @@ export function registerDiscover() {
       list.innerHTML = items.length ? `<div class="archive-grid reveal">${items.map((a, i) => `
         <a class="archive-card" href="/u/${encodeURIComponent(a.username)}" data-link>
           <div class="archive-card-top"><span>NO. ${String(i + 1).padStart(3, '0')}</span><span>${a.copy_count} ITEMS</span></div>
-          <div class="archive-card-name">${esc(a.display_name)}</div>
+          <div class="archive-card-name">${esc(a.display_name)}${a.username === 'official' ? '<span class="privacy-badge" style="margin-left:10px">内置文案库</span>' : ''}</div>
           <div class="archive-card-bio">${esc(a.bio || '这位档案主理人还没有写下简介。')}</div>
           <div class="mono faint" style="font-size:var(--t-micro);margin-top:16px">@${esc(a.username)} · ${a.category_count} 分类 ↗</div>
         </a>`).join('')}</div>`
