@@ -1,6 +1,8 @@
 /* 线上端到端验证：注册 → 上传 → 多分类 → 搜索 → 分享链接 → 访客访问 → 复制 */
 const CDP = 'http://127.0.0.1:9222';
 const BASE = process.env.CA_BASE || 'https://yroist0520-ui.github.io/copy-archive';
+const SHARE = process.env.CA_SHARE || '';
+const withShare = (path) => BASE + path + (SHARE ? (path.includes('?') ? '&' : '?') + 'sharecode=' + SHARE : '');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
 
@@ -32,8 +34,20 @@ async function evaluate(expression) {
   const r = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
   return r.result?.result?.value;
 }
+/** 轮询等待某个表达式为真，返回是否等到 */
+async function waitFor(expression, timeout = 10000) {
+  const started = Date.now();
+  while (Date.now() - started < timeout) {
+    let value = false;
+    try { value = await evaluate(expression); } catch { value = false; }
+    if (value) return true;
+    await sleep(200);
+  }
+  return false;
+}
+
 async function go(path) {
-  await send('Page.navigate', { url: BASE + path });
+  await send('Page.navigate', { url: withShare(path) });
   for (let i = 0; i < 50; i += 1) {
     await sleep(150);
     if (await evaluate(`document.readyState === 'complete' && !!document.querySelector('#app > *')`)) break;
@@ -91,7 +105,9 @@ check('分享链接含用户名与子路径', String(shareUrl).includes(`/copy-a
 
 // 访客访问（清 cookie 模拟新访客，但仍能读公开档案）
 await go(`/u/${user}`);
+await waitFor(`!!document.querySelector('.profile-name')`);
 check('访客可访问公开档案', await evaluate(`!!document.querySelector('.profile-name')`), await evaluate(`document.getElementById('app').innerHTML.slice(0,120)`));
+await waitFor(`document.querySelectorAll('[data-action="copy"]').length > 0`);
 check('访客可复制公开文案', await evaluate(`document.querySelectorAll('[data-action="copy"]').length > 0`));
 
 // 复制只复制正文

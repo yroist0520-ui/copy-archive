@@ -1,6 +1,8 @@
 /* 示例文案填充专项测试：按钮 → 导入 → 分类关联 → 重复导入不产生重复数据 */
 const CDP = 'http://127.0.0.1:9222';
 const BASE = process.env.CA_BASE || 'http://127.0.0.1:8765';
+const SHARE = process.env.CA_SHARE || '';
+const withShare = (path) => BASE + path + (SHARE ? (path.includes('?') ? '&' : '?') + 'sharecode=' + SHARE : '');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
 
@@ -33,8 +35,20 @@ async function evaluate(expression) {
   if (r.result?.exceptionDetails) return { __error: r.result.exceptionDetails.text };
   return r.result?.result?.value;
 }
+/** 轮询等待某个表达式为真，返回是否等到 */
+async function waitFor(expression, timeout = 10000) {
+  const started = Date.now();
+  while (Date.now() - started < timeout) {
+    let value = false;
+    try { value = await evaluate(expression); } catch { value = false; }
+    if (value) return true;
+    await sleep(200);
+  }
+  return false;
+}
+
 async function go(path) {
-  await send('Page.navigate', { url: BASE + path });
+  await send('Page.navigate', { url: withShare(path) });
   for (let i = 0; i < 60; i += 1) {
     await sleep(150);
     if (await evaluate(`document.readyState === 'complete' && !!document.querySelector('#app > *')`)) break;
@@ -65,17 +79,20 @@ check('注册成功', (await evaluate(`document.querySelector('#auth-btn').textC
 
 // 档案页
 await go('/profile');
+await waitFor(`!!document.querySelector('#p-seed')`);
 check('档案页显示「填充示例文案」入口', await evaluate(`!!document.querySelector('#p-seed')`));
 check('入口提示文案存在', await evaluate(`document.body.textContent.includes('示例文案')`));
 
 // 填充
 await evaluate(`document.querySelector('#p-seed').click()`);
 await sleep(2500);
+await waitFor(`document.body.textContent.includes('已填充')`);
 check('填充后有成功提示', await evaluate(`document.body.textContent.includes('已填充')`), await evaluate(`document.body.textContent.slice(0,80)`));
 
 // 文案库检查
 await go('/archive');
 const total = await evaluate(`document.querySelectorAll('.copy-card').length`);
+await waitFor(`document.querySelectorAll('.copy-card').length > 0`);
 check('文案库出现文案卡片', total > 0, String(total));
 check('卡片带分类标签', await evaluate(`document.querySelectorAll('.card-cats .chip').length > 0`));
 check('卡片带语种标签', await evaluate(`document.querySelectorAll('.card-tags .tag').length > 0`));
@@ -100,11 +117,16 @@ const COUNT = `(() => {
 await go('/profile');
 const before = await evaluate(COUNT);
 await evaluate(`document.querySelector('#p-seed').click()`);
-await sleep(2500);
+await waitFor(`document.body.textContent.includes('无需重复填充')`);
+const repeatToast = await evaluate(`(() => {
+  const list = [...document.querySelectorAll('.toast')];
+  return list.length ? list.map(t => t.textContent).join(' / ') : '';
+})()`);
+await sleep(800);
 await go('/archive');
 const after = await evaluate(COUNT);
 check('重复填充不产生重复数据', Number(before) === Number(after), `${before} → ${after}`);
-check('重复填充提示无需重复填充', await evaluate(`document.body.textContent.includes('无需重复填充') || true`));
+check('重复填充提示无需重复填充', String(repeatToast).includes('无需重复填充'), repeatToast);
 
 check('无运行时错误', errors.length === 0, errors.join(' | '));
 
