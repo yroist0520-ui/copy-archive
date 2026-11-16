@@ -4,7 +4,7 @@
  * 显示条件：
  *  · 处于本地模式（/api 不可用，说明是纯静态托管）
  *  · 本次会话没有因为「先随便看看」跳过
- *  · 用户没有明确选择过「建立自己的档案」（记在 localStorage，永久生效）
+ *  · 用户没有做过选择（「去公开档案」或「建立自己的档案」都记录在 localStorage）
  * 完整版（有真实后端）不显示——那里本来就是完整体验。
  */
 import { state, FULL_VERSION_URL, toast } from './core.js';
@@ -27,7 +27,8 @@ function close(gate) {
 
 export function maybeShowEntryGate() {
   if (!state.localMode) return;
-  if (localStorage.getItem(CHOICE_KEY) === 'local') return;
+  // 用户已经表达过选择（无论去完整版还是留本地版）就不再打扰
+  if (localStorage.getItem(CHOICE_KEY)) return;
   if (sessionStorage.getItem(SEEN_KEY) === '1') return;
   if (document.getElementById('entry-gate')) return;
 
