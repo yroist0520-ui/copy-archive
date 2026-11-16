@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: copy-archive
+    runtime: python
+    buildCommand: echo "no third-party dependencies"
+    startCommand: python3 server.py
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: HOST
+        value: "0.0.0.0"
+    disk:
+      name: data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
