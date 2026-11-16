@@ -529,6 +529,66 @@ async function handle(db, method, path, query, body) {
     return { existing };
   }
 
+  // ---- 链接导入（本地静态版）：通过 r.jina.ai 免代理抓取网页正文 ----
+  // 完整版有服务端代理与 SSRF 防护；静态版没有后端，用公开转换服务兜底。
+  if (path === '/api/fetch-url' && method === 'POST') {
+    requireUser(db);
+    let raw = String(body.url || '').trim();
+    if (!raw) throw new LocalApiError(400, '请提供链接');
+    if (!/^https?:\/\//i.test(raw)) raw = 'https://' + raw;
+    let target;
+    try {
+      const u = new URL(raw);
+      if (!['http:', 'https:'].includes(u.protocol)) throw new Error('protocol');
+      const host = u.hostname;
+      if (/^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|0\.0\.0\.0|\[::1\])/.test(host)) {
+        throw new Error('private');
+      }
+      target = u.toString();
+    } catch {
+      throw new LocalApiError(400, '请提供有效的 http(s) 链接');
+    }
+    let md = '';
+    try {
+      const res = await fetch(`https://r.jina.ai/${target}`, {
+        headers: { Accept: 'text/plain' },
+        signal: AbortSignal.timeout(25000),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      md = await res.text();
+    } catch {
+      throw new LocalApiError(502, '抓取失败：转换服务不可用或链接无法访问，建议使用完整版导入');
+    }
+    // r.jina.ai 返回 Markdown：标题摘出，正文按行清洗，图片从 ![](src) 提取
+    const lines = [];
+    const seen = new Set();
+    let title = '';
+    for (const rawLine of md.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      const mTitle = line.match(/^title:\s*(.+)$/i);
+      if (!title && mTitle) { title = mTitle[1].trim().slice(0, 150); continue; }
+      if (/^(url:|markdown content:|---$)/i.test(line)) continue;
+      if (/^!\[[^\]]*\]\(/.test(line)) continue;
+      if (!line || line.length < 2) continue;
+      const plain = line.replace(/^#{1,6}\s+/, '').replace(/^[-*]\s+/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').trim();
+      if (plain.length < 2) continue;
+      const key = plain.replace(/\s+/g, '');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      lines.push(plain.slice(0, 600));
+      if (lines.length >= 400) break;
+    }
+    const images = [...md.matchAll(/!\[[^\]]*\]\(([^)\s]+)/g)]
+      .map((m) => (m[1].startsWith('//') ? 'https:' + m[1] : m[1]))
+      .filter((src) => /^https?:\/\//.test(src))
+      .filter((src, i, arr) => arr.indexOf(src) === i)
+      .slice(0, 24);
+    if (!lines.length && !images.length) {
+      throw new LocalApiError(422, '没有从该页面提取到内容，可能是纯图片页或需要登录的页面');
+    }
+    return { url: target, title, lines, images, lineCount: lines.length, imageCount: images.length };
+  }
+
   // ---- 文案列表 ----
   if (path === '/api/copies' && method === 'GET') {
     const session = currentSession(db);

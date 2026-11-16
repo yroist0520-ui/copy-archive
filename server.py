@@ -8,16 +8,20 @@ Python 标准库 HTTP Server + SQLite 真实数据库。
 
 import hashlib
 import hmac
+import ipaddress
 import json
 import mimetypes
 import os
 import re
 import secrets
+import socket
 import sqlite3
 import threading
 import time
 import urllib.parse
+import urllib.request
 from datetime import datetime, timedelta, timezone
+from html.parser import HTMLParser
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -581,6 +585,245 @@ def resolve_category_ids(conn, user_id, raw):
 
 
 # ---------------------------------------------------------------------------
+# 链接导入：网页抓取与正文提取（链接导入功能）
+# ---------------------------------------------------------------------------
+
+FETCH_UA = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 "
+    "(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+)
+FETCH_MAX_BYTES = 3 * 1024 * 1024
+PROXY_IMAGE_MAX_BYTES = 8 * 1024 * 1024
+
+
+def validate_fetch_url(raw):
+    """校验待抓取链接：仅 http(s)，且域名不得解析到内网/回环地址（SSRF 防护）。"""
+    if not isinstance(raw, str) or not raw.strip():
+        raise ApiError(400, "请提供链接")
+    raw = raw.strip()
+    if not raw.lower().startswith(("http://", "https://")):
+        raw = "https://" + raw
+    parsed = urllib.parse.urlparse(raw)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise ApiError(400, "请提供有效的 http(s) 链接")
+    try:
+        infos = socket.getaddrinfo(parsed.hostname, None)
+    except Exception:
+        raise ApiError(400, "无法解析该域名，请检查链接")
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            continue
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_unspecified or ip.is_multicast:
+            raise ApiError(400, "该链接指向内网地址，出于安全考虑不予抓取")
+    return urllib.parse.urlunparse(parsed)
+
+
+def append_share_for_self(handler, url):
+    """目标与当前站点同域时透传 sharecode。
+
+    部署平台的网关要求所有请求带 sharecode；用户抓取/代理自己站内页面时，
+    服务端二次请求不带 sharecode 会被拦，这里自动补上当前请求的 sharecode。
+    """
+    try:
+        parsed = urllib.parse.urlparse(url)
+        host = (handler.headers.get("Host") or "").split(":")[0]
+        if parsed.hostname and host and parsed.hostname.lower() == host.lower():
+            qs = urllib.parse.parse_qs(urllib.parse.urlparse(handler.path).query)
+            sc = (qs.get("sharecode") or [""])[0]
+            if sc and "sharecode" not in (parsed.query or ""):
+                url = url + ("&" if parsed.query else "?") + "sharecode=" + sc
+    except Exception:
+        pass
+    return url
+
+
+def fetch_html(url):
+    """抓取网页 HTML（模拟移动浏览器 UA；公众号文章对桌面 UA 会返回验证页）。"""
+    req = urllib.request.Request(url, headers={
+        "User-Agent": FETCH_UA,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.6",
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            ctype = (resp.headers.get("Content-Type") or "").lower()
+            raw = resp.read(FETCH_MAX_BYTES + 1)
+    except ApiError:
+        raise
+    except Exception:
+        raise ApiError(502, "抓取失败：链接无法访问或超时")
+    if len(raw) > FETCH_MAX_BYTES:
+        raise ApiError(413, "页面过大，无法抓取")
+    if "html" not in ctype and "xml" not in ctype and "text" not in ctype and b"<html" not in raw[:2000].lower():
+        raise ApiError(400, "该链接不是网页，仅支持网页内容抓取")
+    charset = "utf-8"
+    m = re.search(r"charset=([\w-]+)", ctype)
+    if not m:
+        m = re.search(rb'charset=["\']?([\w-]+)', raw[:2048], re.I)
+        if m:
+            charset = m.group(1).decode("ascii", "ignore")
+    try:
+        return raw.decode(charset, "replace")
+    except LookupError:
+        return raw.decode("utf-8", "replace")
+
+
+class PageExtractor(HTMLParser):
+    """提取网页正文文本行与图片地址。
+
+    正文定位：优先取微信 #js_content、article、id/class 含 article/content/main
+    等特征的容器；取不到足够内容时退回全文。文本按块级元素切行，保留原文标点。
+    """
+
+    SKIP_TAGS = {"script", "style", "noscript", "svg", "iframe", "canvas", "template", "select", "button", "textarea", "form"}
+    BLOCK_TAGS = {"p", "div", "br", "h1", "h2", "h3", "h4", "h5", "h6", "li", "tr",
+                  "section", "article", "blockquote", "figcaption", "pre", "header",
+                  "footer", "ul", "ol", "table", "dl", "dt", "dd", "aside", "nav", "hr", "figure", "address"}
+    MAIN_HINT = re.compile(r"js_content|rich_media_content|post[-_]?(body|content)|entry[-_]content|article[-_]?(body|content)|(^|[^\w])(main|content|article)([^\w]|$)", re.I)
+    DECOR_SRC = re.compile(r"(sprite|icon|logo|avatar|blank|spacer|loading|\.svg($|\?)|\.ico($|\?))", re.I)
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.all_lines = []
+        self.main_lines = []
+        self.images = []
+        self.title = ""
+        self._skip = 0
+        self._buf = []
+        self._main_buf = []
+        self._main_stack = []  # 开启了 main 区域的 tag 栈
+
+    # -- 行缓冲 --
+    def _flush(self):
+        text = "".join(self._buf).strip()
+        self._buf = []
+        if text:
+            self.all_lines.append(text)
+        if self._main_stack:
+            text_main = "".join(self._main_buf).strip()
+            self._main_buf = []
+            if text_main:
+                self.main_lines.append(text_main)
+        else:
+            self._main_buf = []
+
+    def _maybe_enter_main(self, tag, attrs):
+        a = dict(attrs)
+        ident = " ".join(filter(None, [a.get("id"), a.get("class")]))
+        if tag == "article" or self.MAIN_HINT.search(ident):
+            self._main_stack.append(tag)
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if tag == "meta" and (a.get("property") or "") == "og:title" and (a.get("content") or "").strip():
+            self.title = self.title or a["content"].strip()
+            return
+        if tag in self.SKIP_TAGS:
+            self._skip += 1
+            return
+        if self._skip:
+            return
+        if tag == "img":
+            src = a.get("src") or a.get("data-src") or a.get("data-lazy-src") or a.get("data-original") or ""
+            if src and not src.startswith("data:"):
+                self.images.append(src)
+            return
+        self._maybe_enter_main(tag, attrs)
+        if tag in self.BLOCK_TAGS:
+            self._flush()
+
+    def handle_endtag(self, tag):
+        if tag in self.SKIP_TAGS:
+            if self._skip:
+                self._skip -= 1
+            return
+        if self._main_stack and self._main_stack[-1] == tag:
+            self._main_stack.pop()
+            self._flush()
+        elif tag in self.BLOCK_TAGS:
+            self._flush()
+
+    def handle_data(self, data):
+        if self._skip:
+            return
+        text = data.strip()
+        if not text:
+            return
+        self._buf.append(text)
+        if self._main_stack:
+            self._main_buf.append(text)
+
+    def handle_startendtag(self, tag, attrs):
+        if tag == "img" and not self._skip:
+            a = dict(attrs)
+            src = a.get("src") or a.get("data-src") or a.get("data-lazy-src") or a.get("data-original") or ""
+            if src and not src.startswith("data:"):
+                self.images.append(src)
+        elif tag in self.BLOCK_TAGS and not self._skip:
+            self._flush()
+
+
+def _clean_lines(raw_lines, limit=400):
+    """按行清洗：去首尾空白、丢过短行、保序去重。不做改写，尊重原文标点。"""
+    out, seen = [], set()
+    for line in raw_lines:
+        line = line.strip()
+        if len(line) < 2:
+            continue
+        if line in seen:
+            continue
+        seen.add(line)
+        out.append(line[:600])
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _normalize_images(raw_srcs, base_url, limit=24):
+    """图片地址绝对化 + 去重 + 过滤装饰图。"""
+    out, seen = [], set()
+    for src in raw_srcs:
+        src = src.strip()
+        if src.startswith("//"):
+            src = "https:" + src
+        elif src and not src.lower().startswith(("http://", "https://")):
+            try:
+                src = urllib.parse.urljoin(base_url, src)
+            except Exception:
+                continue
+        if not src.lower().startswith(("http://", "https://")):
+            continue
+        if PageExtractor.DECOR_SRC.search(src):
+            continue
+        if src in seen:
+            continue
+        seen.add(src)
+        out.append(src)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def extract_page(html_text, base_url):
+    parser = PageExtractor()
+    try:
+        parser.feed(html_text)
+        parser.close()
+    except Exception:
+        pass
+    lines = _clean_lines(parser.main_lines if len(parser.main_lines) >= 3 else parser.all_lines)
+    images = _normalize_images(parser.images, base_url)
+    if not parser.title:
+        m = re.search(r"<h1[^>]*>(.*?)</h1>", html_text, re.S | re.I)
+        if m:
+            parser.title = re.sub(r"<[^>]+>", "", m.group(1)).strip()
+    return parser.title[:150], lines, images
+
+
+
+# ---------------------------------------------------------------------------
 # 路由处理
 # ---------------------------------------------------------------------------
 
@@ -942,6 +1185,35 @@ def handle_api(handler, method, path, query, conn):
         created, skipped = seed_sample_copies(conn, me["id"])
         return 200, {"ok": True, "created": created, "skipped": skipped}
 
+    # ---- 链接导入：抓取网页文案与图片（登录用户） ----
+    if path == "/api/fetch-url" and method == "POST":
+        require_auth(handler, conn)
+        body = read_body(handler)
+        url = append_share_for_self(handler, validate_fetch_url(body.get("url")))
+        # 站内页面直接读本地文件（服务端出站抓自身域名会被部署网关拦截）
+        html_text = ""
+        try:
+            parsed = urllib.parse.urlparse(url)
+            candidate = (PUBLIC_DIR / parsed.path.lstrip("/")).resolve()
+            candidate.relative_to(PUBLIC_DIR.resolve())
+            if candidate.is_file() and candidate.suffix.lower() in (".html", ".htm"):
+                html_text = candidate.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            html_text = ""
+        if not html_text:
+            html_text = fetch_html(url)
+        title, lines, images = extract_page(html_text, url)
+        if not lines and not images:
+            raise ApiError(422, "没有从该页面提取到内容，可能是纯图片页或需要登录的页面")
+        return 200, {
+            "url": url,
+            "title": title,
+            "lines": lines,
+            "images": images,
+            "lineCount": len(lines),
+            "imageCount": len(images),
+        }
+
     # ---- 发现页 ----
     if path == "/api/discover" and method == "GET":
         rows = conn.execute("""
@@ -1069,6 +1341,50 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def serve_proxy_image(self, query, conn):
+        require_auth(self, conn)
+        raw = (query.get("url") or [""])[0]
+        url = validate_fetch_url(raw)
+        # 站内图片直接读本地静态文件：避免服务端出站抓取自身域名被部署网关拦下
+        try:
+            parsed = urllib.parse.urlparse(url)
+            candidate = (PUBLIC_DIR / parsed.path.lstrip("/")).resolve()
+            candidate.relative_to(PUBLIC_DIR.resolve())
+            if candidate.is_file():
+                data = candidate.read_bytes()
+                ctype = mimetypes.guess_type(str(candidate))[0] or "application/octet-stream"
+                if ctype.startswith("image/"):
+                    self.send_response(200)
+                    self.send_header("Content-Type", ctype)
+                    self.send_header("Content-Length", str(len(data)))
+                    self.send_header("Cache-Control", "max-age=86400")
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
+        except ApiError:
+            raise
+        except Exception:
+            pass
+        req = urllib.request.Request(url, headers={"User-Agent": FETCH_UA})
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                ctype = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+                data = resp.read(PROXY_IMAGE_MAX_BYTES + 1)
+        except ApiError:
+            raise
+        except Exception:
+            raise ApiError(502, "图片拉取失败")
+        if len(data) > PROXY_IMAGE_MAX_BYTES:
+            raise ApiError(413, "图片过大")
+        if not ctype.startswith("image/"):
+            raise ApiError(400, "链接不是图片")
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "max-age=86400")
+        self.end_headers()
+        self.wfile.write(data)
+
     def session_cookie(self, token):
         return "ca_session={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}".format(token, SESSION_MAX_AGE)
 
@@ -1084,6 +1400,10 @@ class Handler(BaseHTTPRequestHandler):
             conn = db_connect()
             extra_headers = {}
             try:
+                if path == "/api/proxy-image":
+                    # 图片代理：绕过第三方防盗链，供预览缩略图与 OCR 拉取
+                    self.serve_proxy_image(query, conn)
+                    return
                 if method in ("POST", "PUT", "PATCH", "DELETE"):
                     if self.headers.get("X-Requested-With") != "XMLHttpRequest":
                         raise ApiError(403, "请求来源校验失败")

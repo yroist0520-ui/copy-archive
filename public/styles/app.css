@@ -676,6 +676,43 @@ html[data-theme="ink"] .archive-card { border-color: rgba(255, 255, 255, 0.1); }
 }
 
 /* =========================================================
+   链接导入（04 / 链接导入 tab）
+   ========================================================= */
+.l-line-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 10px; border-bottom: 1px dashed color-mix(in srgb, var(--line, #e5e2db) 70%, transparent);
+}
+.l-line-row:hover { background: var(--hover); }
+.l-line-check { flex: 0 0 auto; width: 16px; height: 16px; accent-color: var(--accent); }
+.l-line-input { flex: 1; min-height: 34px; font-size: var(--t-small); background: transparent; border-color: transparent; }
+.l-line-input:hover { border-color: var(--line, #e5e2db); }
+.l-line-input:focus { background: var(--surface); }
+.l-line-badge {
+  flex: 0 0 auto; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em;
+  color: var(--accent-ink); background: var(--accent-soft);
+  padding: 2px 7px; border-radius: var(--r-pill);
+}
+.l-img-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px;
+}
+.l-img-cell {
+  margin: 0; display: flex; flex-direction: column; gap: 6px;
+  border: 1px solid var(--line, #e5e2db); border-radius: var(--r-sm); padding: 8px;
+  background: var(--surface); transition: border-color var(--dur-fast);
+}
+.l-img-cell:hover { border-color: var(--accent); }
+.l-img-cell img {
+  width: 100%; aspect-ratio: 4 / 3; object-fit: cover;
+  border-radius: var(--r-xs); background: var(--hover);
+}
+.l-img-cell img.l-img-broken { visibility: hidden; }
+.l-img-cell figcaption { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+.l-img-check { font-size: var(--t-micro); color: var(--ink-soft); display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.l-img-check input { width: 14px; height: 14px; accent-color: var(--accent); }
+.l-img-status { min-height: 15px; font-family: var(--font-mono); }
+
+/* =========================================================
    分类管理
    ========================================================= */
 .manage-row {
