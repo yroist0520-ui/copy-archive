@@ -169,6 +169,28 @@ def seed_defaults(conn, user_id):
             )
 
 
+def load_samples():
+    """读取示例文案库（public/samples.json）。"""
+    path = PUBLIC_DIR / "samples.json"
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception:
+        return {"groups": []}
+
+
+def guess_tags(text):
+    """按文案语种自动打标签，让标签筛选也有内容可用。"""
+    tags = []
+    if re.search(r"[가-힣]", text):
+        tags.append("韩文")
+    if re.search(r"[一-鿿]", text):
+        tags.append("中文")
+    if re.search(r"[A-Za-z]", text):
+        tags.append("英文")
+    return tags
+
+
 def json_loads(value, fallback):
     try:
         data = json.loads(value)
@@ -783,6 +805,50 @@ def handle_api(handler, method, path, query, conn):
             (display_name, bio, avatar_url, cover_url, theme, privacy, json.dumps(public_ids), me["id"]),
         )
         return 200, {"ok": True}
+
+    # ---- 示例文案库 ----
+    if path == "/api/samples" and method == "GET":
+        return 200, load_samples()
+
+    if path == "/api/samples/seed" and method == "POST":
+        me = require_auth(handler, conn)
+        library = load_samples()
+        # 用户现有分类：按名称匹配
+        owned = {
+            r["name"]: r["id"]
+            for r in conn.execute("SELECT id, name FROM categories WHERE user_id = ?", (me["id"],))
+        }
+        existing = {
+            r["content"]
+            for r in conn.execute("SELECT content FROM copies WHERE user_id = ?", (me["id"],))
+        }
+        created = 0
+        skipped = 0
+        base_ts = datetime.now(timezone.utc)
+        step = 0
+        for grp in library.get("groups", []):
+            for item in grp.get("items", []):
+                cid = owned.get(item.get("name"))
+                if cid is None:
+                    continue
+                for text in item.get("texts", []):
+                    if not text or text in existing:
+                        skipped += 1
+                        continue
+                    step += 1
+                    ts = (base_ts - timedelta(seconds=step)).isoformat(timespec="seconds")
+                    cur = conn.execute(
+                        "INSERT INTO copies (user_id, title, content, note, tags, copy_count, created_at, updated_at) "
+                        "VALUES (?, '', ?, '', ?, 0, ?, ?)",
+                        (me["id"], text, json.dumps(guess_tags(text), ensure_ascii=False), ts, ts),
+                    )
+                    conn.execute(
+                        "INSERT OR IGNORE INTO copy_categories (copy_id, category_id) VALUES (?, ?)",
+                        (cur.lastrowid, cid),
+                    )
+                    existing.add(text)
+                    created += 1
+        return 200, {"ok": True, "created": created, "skipped": skipped}
 
     # ---- 发现页 ----
     if path == "/api/discover" and method == "GET":
