@@ -24,10 +24,20 @@ export const BASE = new URL('../', import.meta.url).pathname;
 
 const BASE_NO_SLASH = BASE === '/' ? '' : BASE.replace(/\/$/, '');
 
+/**
+ * 分享码。部分托管网关要求所有请求携带 sharecode 才能放行，
+ * 一旦缺失，页面内部跳转与分享出去的链接都会失效。
+ * 从当前地址读取后贯穿整个会话，所有生成的路径都会自动带上。
+ */
+export const SHARE_CODE = new URLSearchParams(location.search).get('sharecode') || '';
+
 /** 应用内路径 → 浏览器可访问的完整路径 */
 function appUrl(path) {
   if (!path.startsWith('/')) return path;
-  return `${BASE_NO_SLASH}${path}`;
+  const base = `${BASE_NO_SLASH}${path}`;
+  if (!SHARE_CODE || base.includes('sharecode=')) return base;
+  const sep = base.includes('?') ? '&' : '?';
+  return `${base}${sep}sharecode=${encodeURIComponent(SHARE_CODE)}`;
 }
 
 /** 浏览器路径 → 应用内路径 */
@@ -42,24 +52,13 @@ export function stripBase(pathname) {
 /* ---------------- 后端探测 ---------------- */
 
 /**
- * 探测同源是否运行着 Python 后端。
- * GitHub Pages 等纯静态托管下 /api/health 会返回 404，此时切换到本地模式，
- * 由 local-api.js 以同一套契约在浏览器内提供完整功能。
+ * 判定当前部署形态。
+ *
+ * 不再用独立的健康探测接口，改为直接看真实请求的响应类型：
+ * 纯静态托管（GitHub Pages）下 /api/* 返回的是 HTML 404，而真实后端始终返回 JSON。
+ * 这样可避免「一次网络抖动就把整个会话误判成单机模式」——
+ * 那会让用户以为注册成功，实际数据却只落在浏览器里。
  */
-let backendProbe = null;
-
-function probeBackend() {
-  if (!backendProbe) {
-    backendProbe = fetch(appUrl('/api/health'), {
-      method: 'GET',
-      credentials: 'same-origin',
-      headers: { 'X-Requested-With': 'XMLHttpRequest' },
-    })
-      .then((r) => r.ok)
-      .catch(() => false);
-  }
-  return backendProbe;
-}
 
 function markLocalMode() {
   if (state.localMode) return;
@@ -71,16 +70,6 @@ function markLocalMode() {
 /* ---------------- API ---------------- */
 
 export async function api(path, { method = 'GET', body, quiet = false } = {}) {
-  if (path.startsWith('/api/') && !(await probeBackend())) {
-    markLocalMode();
-    try {
-      return await localApi(path, { method, body });
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error('操作失败');
-      if (!quiet && error.status !== 404) toast(error.message, 'error');
-      throw error;
-    }
-  }
   const options = {
     method,
     credentials: 'same-origin',
@@ -90,13 +79,50 @@ export async function api(path, { method = 'GET', body, quiet = false } = {}) {
     options.headers['Content-Type'] = 'application/json';
     options.body = JSON.stringify(body);
   }
+
+  // 已经确认是纯静态托管，直接走本地实现
+  if (state.localMode && path.startsWith('/api/')) {
+    try {
+      return await localApi(path, { method, body });
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('操作失败');
+      if (!quiet && error.status !== 404) toast(error.message, 'error');
+      throw error;
+    }
+  }
+
   let response;
   try {
     response = await fetch(appUrl(path), options);
   } catch (err) {
+    // 网络不可达：退化为本地模式，保证功能仍可使用
+    if (path.startsWith('/api/')) {
+      markLocalMode();
+      try {
+        return await localApi(path, { method, body });
+      } catch (localErr) {
+        const error = localErr instanceof Error ? localErr : new Error('操作失败');
+        if (!quiet) toast(error.message, 'error');
+        throw error;
+      }
+    }
     if (!quiet) toast('网络连接失败，请检查网络后重试', 'error');
     throw err;
   }
+
+  // 静态托管下 /api/* 会命中 SPA 回退，返回 HTML 而非 JSON → 判定为无后端
+  const contentType = response.headers.get('content-type') || '';
+  if (path.startsWith('/api/') && !contentType.includes('application/json')) {
+    markLocalMode();
+    try {
+      return await localApi(path, { method, body });
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('操作失败');
+      if (!quiet && error.status !== 404) toast(error.message, 'error');
+      throw error;
+    }
+  }
+
   let payload;
   try {
     payload = await response.json();

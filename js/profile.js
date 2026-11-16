@@ -2,7 +2,7 @@
 import {
   state, api, route, esc, fmtDate, openAuth, toast, copyText,
   loadCategories, debounce, refreshSession, updateAuthButton, renderRoute, BASE,
-  loadSamples, seedSampleEntries,
+  loadSamples, seedSampleEntries, SHARE_CODE,
 } from './core.js';
 import { copyGrid, bindCopyCards, emptyState, categoryChips, bindChips, pagination } from './ui.js';
 import { openDetail } from './detail.js';
@@ -25,7 +25,9 @@ export function registerProfile() {
     await loadCategories();
     const me = state.user;
     const data = await api('/api/copies?pageSize=6&sort=newest', { quiet: true }).catch(() => ({ items: [], total: 0 }));
-    const shareUrl = `${location.origin}${BASE.replace(/\/$/, '')}/u/${encodeURIComponent(me.username)}`;
+    const sharePath = `${BASE.replace(/\/$/, '')}/u/${encodeURIComponent(me.username)}`;
+    // 部分托管网关要求 sharecode 才能放行，分享链接必须带上
+    const shareUrl = `${location.origin}${sharePath}${SHARE_CODE ? `?sharecode=${encodeURIComponent(SHARE_CODE)}` : ''}`;
     const publicCats = state.categories.filter((c) => (me.publicCategoryIds || []).includes(c.id));
     const samples = await loadSamples();
     const sampleTotal = samples

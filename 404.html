@@ -4,22 +4,25 @@
 <body>
 <script>
   // GitHub Pages 单页应用深链兜底。
-  // 静态托管无法知道应用挂在哪一级目录，因此逐级向上探测 index.html，
-  // 找到第一个能访问的位置即为应用根，然后回到入口由 main.js 恢复路由。
+  // 静态托管无法知道应用挂在哪一级目录，因此逐级向上探测 index.html
+  // 定位应用根，然后回到入口由 main.js 恢复路由。
+  // 若网关依赖 sharecode 放行，回跳时必须原样带上，否则会 403。
   (function () {
     var levels = ['./', '../', '../../', '../../../', '../../../../'];
     var saved = location.pathname + location.search;
+    var share = new URLSearchParams(location.search).get('sharecode');
+    var suffix = share ? '?sharecode=' + encodeURIComponent(share) : '';
 
     function probe(index) {
       if (index >= levels.length) {
-        location.replace('./');
+        location.replace('./' + suffix);
         return;
       }
-      fetch(levels[index] + 'index.html', { method: 'GET', cache: 'no-store' })
+      fetch(levels[index] + 'index.html' + suffix, { method: 'GET', cache: 'no-store' })
         .then(function (res) {
           if (res.ok) {
             sessionStorage.setItem('ca_redirect', saved);
-            location.replace(levels[index]);
+            location.replace(levels[index] + suffix);
           } else {
             probe(index + 1);
           }
