@@ -12,6 +12,8 @@ body {
   line-height: 1.8;
   letter-spacing: 0.012em;
   min-height: 100vh;
+  /* 沉浸式下避让 home indicator */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: background-color 0.4s var(--ease), color 0.4s var(--ease);

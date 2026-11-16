@@ -1,0 +1,17 @@
+{
+  "name": "文案档案馆 — Copy Archive",
+  "short_name": "文案档案馆",
+  "description": "个人文案档案馆。收集、整理、复制与分享属于你的文字。",
+  "lang": "zh-CN",
+  "display": "standalone",
+  "orientation": "portrait",
+  "start_url": "./?sharecode=HC3YZORW3G",
+  "scope": "./",
+  "background_color": "#F7F7F5",
+  "theme_color": "#F7F7F5",
+  "icons": [
+    { "src": "icons/icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

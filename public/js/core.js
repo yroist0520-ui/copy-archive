@@ -295,10 +295,15 @@ export const THEMES = [
   { id: 'paper', label: '纸白' },
   { id: 'ink', label: '墨黑' },
   { id: 'newsprint', label: '新闻纸' },
-];/** 切换主题并记忆 */
+];/** 主题 → 系统 UI 颜色（浏览器栏 / PWA 状态栏沉浸色随主题走） */
+const THEME_COLORS = { paper: '#F7F7F5', ink: '#1A1A1C', newsprint: '#F5F0E7' };
+
+/** 切换主题并记忆 */
 export function applyTheme(theme, { remember = true } = {}) {
   state.theme = theme;
   document.documentElement.dataset.theme = theme;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', THEME_COLORS[theme] || THEME_COLORS.paper);
   if (remember) localStorage.setItem('ca_theme', theme);
 }
 
