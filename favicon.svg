@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>文案档案馆</title>
+  <defs>
+    <radialGradient id="clay" cx="38%" cy="30%" r="80%">
+      <stop offset="0%" stop-color="#B8453A"/>
+      <stop offset="62%" stop-color="#A23429"/>
+      <stop offset="100%" stop-color="#8D2B22"/>
+    </radialGradient>
+  </defs>
+  <!-- 朱砂印章底 -->
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#clay)"/>
+  <!-- 印章内框线 -->
+  <rect x="10.5" y="10.5" width="43" height="43" rx="7.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.52" stroke-width="1.5"/>
+  <!-- 中式直角引号「」：文案之形，篆刻之意 -->
+  <g fill="none" stroke="#FFFFFF" stroke-width="6.8" stroke-linejoin="miter">
+    <path d="M17.5 32.5 V17.5 H35"/>
+    <path d="M29 46.5 H46.5 V31.5"/>
+  </g>
+</svg>
