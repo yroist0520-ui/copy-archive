@@ -17,6 +17,10 @@
     <link rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,600&family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+SC:wght@400;500;600&display=swap">
   </noscript>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png">
   <link rel="stylesheet" href="styles/tokens.css">
   <link rel="stylesheet" href="styles/base.css">
   <link rel="stylesheet" href="styles/app.css">
@@ -28,7 +32,23 @@
     <div class="container header-wrap">
       <div class="header-inner">
         <a class="brand" href="/" data-link>
-          <span class="brand-mark">CA</span>
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 64 64" width="25" height="25" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <radialGradient id="seal-clay" cx="38%" cy="30%" r="80%">
+                  <stop offset="0%" stop-color="#B8453A"/>
+                  <stop offset="62%" stop-color="#A23429"/>
+                  <stop offset="100%" stop-color="#8D2B22"/>
+                </radialGradient>
+              </defs>
+              <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#seal-clay)"/>
+              <rect x="10.5" y="10.5" width="43" height="43" rx="7.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.52" stroke-width="1.5"/>
+              <g fill="none" stroke="#FFFFFF" stroke-width="6.8" stroke-linejoin="miter">
+                <path d="M17.5 32.5 V17.5 H35"/>
+                <path d="M29 46.5 H46.5 V31.5"/>
+              </g>
+            </svg>
+          </span>
           <span class="brand-name">Copy Archive</span>
         </a>
         <nav class="main-nav" aria-label="主导航">
