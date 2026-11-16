@@ -8,7 +8,8 @@
    ========================================================= */
 .site-header {
   position: sticky; top: 0; z-index: 60;
-  padding-top: 10px;
+  /* 沉浸式（black-translucent）下状态栏浮于内容上，避让刘海/灵动岛 */
+  padding-top: max(10px, env(safe-area-inset-top));
   background: transparent;
 }
 .site-header .container { display: flex; justify-content: center; }
@@ -843,7 +844,7 @@ html[data-theme="ink"] .archive-card { border-color: rgba(255, 255, 255, 0.1); }
 }
 
 @media (max-width: 780px) {
-  .site-header { padding-top: 8px; }
+  .site-header { padding-top: max(8px, env(safe-area-inset-top)); }
   .header-inner { height: 44px; padding: 0 4px 0 12px; gap: var(--s2); }
   .brand-name { display: none; }
   .main-nav { display: none; }

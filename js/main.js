@@ -10,6 +10,21 @@ import { registerDiscover } from './discover.js';
 import { registerContribute } from './contribute.js';
 import { maybeShowEntryGate } from './entry-gate.js';
 
+/**
+ * 静态托管子路径保护（GitHub Pages /copy-archive/ 等）：
+ * SPA 深链下浏览器会把相对路径的 favicon/manifest 解析到当前路径而 404，
+ * 导致"添加到主屏幕"拿不到图标。这里按脚本自身位置推算站点根，
+ * 把 head 里的图标/manifest 引用锚定为绝对路径。
+ */
+const SITE_ROOT = new URL('../', import.meta.url).pathname;
+if (SITE_ROOT !== '/') {
+  for (const link of document.head.querySelectorAll('link[rel*="icon"], link[rel="manifest"]')) {
+    const href = link.getAttribute('href') || '';
+    if (!href || href.startsWith('/') || href.startsWith('http') || href.startsWith('data:')) continue;
+    link.setAttribute('href', SITE_ROOT + href.replace(/^\.\//, ''));
+  }
+}
+
 registerHome();
 registerArchive();
 registerUpload();
