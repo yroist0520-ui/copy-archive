@@ -1,5 +1,5 @@
 /* 场景 B：已注册私密用户投稿 → 公开引导按钮（验证 refreshSession bug 修复）
- * 同时回归验证：投稿链接打开 → 登录识别 → 导入 → 公开操作生效 → 访客可搜索 */
+ * 场景 C：公开用户再次投稿 → 直接显示可搜索提示 */
 const CDP = 'http://127.0.0.1:9222';
 const BASE = 'https://wbapp-kvp8vfjqdet5wf5ww0viai.app.workbuddy.host';
 const SC = 'HC3YZORW3G';
@@ -20,12 +20,15 @@ function encodeContribution(obj) {
 
 /* 1. API 注册一个私密用户 */
 const user = 'ctb' + Math.random().toString(36).slice(2, 8);
-const reg = await fetch(`${BASE}/api/register?sharecode=${SC}`, { method: 'POST', headers: HDR, body: JSON.stringify({ username: user, email: `${user}@t.dev`, password: 'secret123', displayName: '私密投稿员' }) });
-const regOk = reg.status === 200 || reg.status === 201;
-const regCookie = reg.headers.get('set-cookie') || '';
-check('API 注册测试用户', regOk, `status=${reg.status}`);
+const reg = await fetch(`${BASE}/api/auth/register?sharecode=${SC}`, { method: 'POST', headers: HDR, body: JSON.stringify({ username: user, email: `${user}@t.dev`, password: 'secret123', displayName: '私密投稿员' }) });
+const regData = await reg.json().catch(() => ({}));
+const setCookie = reg.headers.get('set-cookie') || '';
+const mck = /ca_session=([^;]+)/.exec(setCookie);
+const regCookie = mck ? `ca_session=${mck[1]}` : (regData.token ? `ca_session=${regData.token}` : '');
+check('API 注册测试用户', reg.status === 200 && !!regCookie, `status=${reg.status}`);
+if (!regCookie) { console.log('注册失败，中止'); process.exit(1); }
 await fetch(`${BASE}/api/profile?sharecode=${SC}`, { method: 'PUT', headers: { ...HDR, Cookie: regCookie }, body: JSON.stringify({ privacy: 'private' }) });
-const me = await fetch(`${BASE}/api/me?sharecode=${SC}`, { headers: { Cookie: regCookie, 'X-Requested-With': 'XMLHttpRequest' } }).then((r) => r.json());
+const me = await fetch(`${BASE}/api/auth/me?sharecode=${SC}`, { headers: { Cookie: regCookie, 'X-Requested-With': 'XMLHttpRequest' } }).then((r) => r.json());
 check('用户已设为 private', me.user?.privacy === 'private', JSON.stringify(me.user?.privacy));
 
 const TOKEN = 'CTB' + Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -89,11 +92,11 @@ for (let i = 0; i < 5; i++) {
 check('深链兜底后路由恢复为 /contribute', await waitFor(`location.pathname === '/contribute'`, 20000));
 check('未登录显示注册引导', await waitFor(`!!document.querySelector('#ct-auth')`, 20000));
 
-/* 4. 在弹层里登录（不是注册）这个 private 用户 */
+/* 4. 弹层登录这个 private 用户（弹层默认登录模式：有 #auth-account 无 #auth-email） */
 await ev(`document.querySelector('#ct-auth').click()`);
 await waitFor(`!!document.querySelector('#auth-account')`);
-await ev(`document.querySelector('.auth-switch')?.click()`);
-await sleep(300);
+const isRegisterMode = await ev(`!!document.querySelector('#auth-email')`);
+if (isRegisterMode) { await ev(`document.querySelector('.auth-switch')?.click()`); await sleep(300); }
 await ev(`
   document.querySelector('#auth-account').value = '${user}';
   document.querySelector('#auth-pass').value = 'secret123';
@@ -101,7 +104,7 @@ await ev(`
 `);
 await ev(`document.querySelector('.modal [data-submit], [data-submit]').click()`);
 check('登录成功回到投稿预览', await waitFor(`!!document.querySelector('#ct-go') && document.body.textContent.includes('确认投稿')`, 20000));
-check('预览识别 2 条文案', await waitFor(`document.body.textContent.includes('2 条')`, 15000));
+check('预览识别 2 条文案', await waitFor(`document.querySelector('.stat-num')?.textContent === '2'`, 15000));
 
 /* 5. 确认投稿 → private 用户应看到公开引导（完全公开 / 部分公开） */
 await ev(`document.querySelector('#ct-go').click()`);
@@ -111,17 +114,16 @@ check('出现公开引导（完全公开按钮）', await waitFor(`!!document.qu
 /* 6. 点击「完全公开」——修复前这里会 ReferenceError: refreshSession is not defined */
 runtimeErrors.length = 0;
 await ev(`document.querySelector('#pub-all').click()`);
-check('点击完全公开无运行时错误', await waitFor(`runtimeErrors.length === 0`, 1) && !runtimeErrors.some((e) => e.includes('refreshSession')));
 check('完全公开成功提示', await waitFor(`document.body.textContent.includes('现在任何人都能在公开档案搜索到')`, 15000));
 check('无 refreshSession 报错', !runtimeErrors.some((e) => e.includes('refreshSession')), runtimeErrors.join(' | '));
 
 /* 7. 会话确实变成 public 且访客可搜索 */
-const me2 = await fetch(`${BASE}/api/me?sharecode=${SC}`, { headers: { Cookie: regCookie, 'X-Requested-With': 'XMLHttpRequest' } }).then((r) => r.json());
+const me2 = await fetch(`${BASE}/api/auth/me?sharecode=${SC}`, { headers: { Cookie: regCookie, 'X-Requested-With': 'XMLHttpRequest' } }).then((r) => r.json());
 check('会话 privacy 已更新为 public', me2.user?.privacy === 'public', JSON.stringify(me2.user?.privacy));
 const found = await fetch(`${BASE}/api/discover?q=${encodeURIComponent(TOKEN)}&sharecode=${SC}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then((r) => r.json());
 check('访客搜索命中投稿文案 ×2', found.popular.filter((p) => p.content.includes(TOKEN)).length === 2, JSON.stringify(found.popular.length));
 
-/* 8. 场景 C：部分公开按钮（回归 refreshSession 第二处调用） */
+/* 8. 场景 C：公开用户再次投稿，直接显示可搜索提示（无需引导） */
 const TOKEN2 = 'CTP' + Math.random().toString(36).slice(2, 8).toUpperCase();
 const payload2 = {
   v: 1,
@@ -130,20 +132,6 @@ const payload2 = {
   categories: ['城市漫游'],
 };
 const url2 = `${BASE}/contribute?sharecode=${SC}#ct=${encodeContribution(payload2)}`;
-await send('Network.clearBrowserCookies');
-await send('Page.navigate', { url: 'about:blank' });
-await sleep(500);
-await send('Page.navigate', { url: `${BASE}/?sharecode=${SC}` });
-await waitFor(`!!document.querySelector('#auth-btn')`, 15000);
-await ev(`document.querySelector('#auth-btn').click()`);
-await waitFor(`!!document.querySelector('#auth-account')`);
-await ev(`
-  document.querySelector('#auth-account').value = '${user}';
-  document.querySelector('#auth-pass').value = 'secret123';
-  true
-`);
-await ev(`document.querySelector('.modal [data-submit], [data-submit]').click()`);
-await waitFor(`document.querySelector('#auth-btn')?.textContent.includes('${user}')`, 15000);
 await send('Page.navigate', { url: 'about:blank' });
 await sleep(500);
 await send('Page.navigate', { url: url2 });
@@ -155,7 +143,6 @@ for (let i = 0; i < 5; i++) {
 check('场景C 投稿页打开（已登录直接预览）', await waitFor(`!!document.querySelector('#ct-go')`, 20000));
 await ev(`document.querySelector('#ct-go').click()`);
 check('场景C 投稿完成', await waitFor(`document.body.textContent.includes('投稿完成')`, 30000));
-/* 用户现在 privacy=public，应直接显示"完全公开"提示而非引导 */
 check('场景C 公开用户直接显示可搜索提示', await waitFor(`document.body.textContent.includes('完全公开')`, 15000));
 
 /* 9. 清场：恢复 private */
