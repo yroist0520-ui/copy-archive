@@ -1093,7 +1093,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(content)))
-        self.send_header("Cache-Control", "no-cache" if candidate.name == "index.html" else "public, max-age=3600")
+        # 前端模块更新频繁且体积小，统一 no-cache 避免发版后浏览器长时间停留在旧代码
+        self.send_header("Cache-Control", "no-cache")
         self.end_headers()
         if method == "GET":
             self.wfile.write(content)

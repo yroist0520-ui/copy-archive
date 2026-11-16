@@ -8,16 +8,21 @@ export function registerHome() {
   route(/^\/$/, async ({ app }) => {
     let discover = { archives: [], popular: [] };
     let latest = { items: [], total: 0 };
+    let officialCats = [];
     try {
       discover = await api('/api/discover', { quiet: true });
     } catch { /* 空数据兜底 */ }
     if (state.user) {
       try { latest = await api('/api/copies?sort=newest&pageSize=6', { quiet: true }); } catch { /* 忽略 */ }
+    } else {
+      // 访客也能逛分类：官方精选公开档案的分类免登录可看
+      try { officialCats = (await api('/api/public/u/official/categories', { quiet: true })).items || []; } catch { /* 静态版无官方档案 */ }
     }
     const totalCopies = state.user ? latest.total : discover.popular.length;
     const groupOrder = ['风格类', '用途类', '其他类', '自定义'];
     const cats = state.categories;
     const grouped = groupOrder.map((g) => ({ group: g, items: cats.filter((c) => c.group === g) })).filter((g) => g.items.length);
+    const officialGrouped = groupOrder.map((g) => ({ group: g, items: officialCats.filter((c) => c.group === g) })).filter((g) => g.items.length);
 
     app.innerHTML = `
       <div class="container">
@@ -53,14 +58,20 @@ export function registerHome() {
         </section>
 
         <section class="section" id="home-categories">
-          <div class="section-head reveal"><span class="section-index">02</span><h2 class="section-title">Categories</h2><span class="section-note">${state.user ? '点击进入分类 · 可自由管理' : '注册后自动生成 · 可自由管理'}</span></div>
-          ${grouped.length ? grouped.map((g, i) => `
+          <div class="section-head reveal"><span class="section-index">02</span><h2 class="section-title">Categories</h2><span class="section-note">${state.user ? '点击进入分类 · 可自由管理' : officialGrouped.length ? '点击预览官方精选分类 · 无需注册' : '注册后自动生成 · 可自由管理'}</span></div>
+          ${state.user && grouped.length ? grouped.map((g, i) => `
             <div class="group-label reveal d${Math.min(i + 1, 5)}">${esc(g.group)} — ${String(g.items.length).padStart(2, '0')} ITEMS</div>
             <div class="category-grid reveal">${g.items.slice(0, 10).map((c) => `
               <button class="category-tile" data-cat-tile="${c.id}" style="--cat-color:${esc(c.color)}">
                 <div class="category-tile-top"><span class="cat-dot" style="background:${esc(c.color)}"></span>${esc(g.group.slice(0, 2))}</div>                <div><div class="category-tile-name">${esc(c.name)}</div><div class="category-tile-count">${c.count} 条文案 ↗</div></div>
               </button>`).join('')}</div>`).join('')
-            : `<div class="category-grid">${['INS','韩系','暗黑','怪诞','古风','少女','可爱','萌物','复古','清冷','高级感','治愈','赛博朋克','哥特','短句','水印','亮晶晶','实拍','朋友圈','个性签名'].map((n) => `<div class="category-tile"><div class="category-tile-top">PRESET</div><div><div class="category-tile-name">${n}</div><div class="category-tile-count">注册后启用</div></div></div>`).join('')}</div>`}
+            : officialGrouped.length ? officialGrouped.map((g, i) => `
+              <div class="group-label reveal d${Math.min(i + 1, 5)}">${esc(g.group)} — ${String(g.items.length).padStart(2, '0')} ITEMS</div>
+              <div class="category-grid reveal">${g.items.map((c) => `
+                <button class="category-tile" data-cat-tile="${c.id}" data-official="1" style="--cat-color:${esc(c.color)}">
+                  <div class="category-tile-top"><span class="cat-dot" style="background:${esc(c.color)}"></span>${esc(g.group.slice(0, 2))}</div>                  <div><div class="category-tile-name">${esc(c.name)}</div><div class="category-tile-count">${c.count} 条文案 ↗</div></div>
+                </button>`).join('')}</div>`).join('')
+            : `<div class="category-grid">${['INS','韩系','暗黑','怪诞','古风','少女','可爱','萌物','复古','清冷','高级感','治愈','赛博朋克','哥特','短句','水印','亮晶晶','实拍','朋友圈','个性签名'].map((n) => `<button class="category-tile" data-presets><div class="category-tile-top">PRESET</div><div><div class="category-tile-name">${n}</div><div class="category-tile-count">注册后启用</div></div></button>`).join('')}</div>`}
         </section>
 
         <section class="section">
@@ -93,10 +104,17 @@ export function registerHome() {
     });
     app.querySelectorAll('[data-cat-tile]').forEach((tile) => {
       tile.addEventListener('click', () => {
-        if (!state.user) { openAuth(); return; }
+        if (!state.user) {
+          if (tile.dataset.official) navigate(`/u/official?category=${tile.dataset.catTile}`);
+          else openAuth();
+          return;
+        }
         navigate(`/archive?category=${tile.dataset.catTile}`);
       });
     });
+    document.querySelectorAll('[data-presets]').forEach((tile) => tile.addEventListener('click', () => {
+      if (!state.user) openAuth();
+    }));
 
     const input = document.getElementById('home-q');
     const clear = document.getElementById('home-clear');
