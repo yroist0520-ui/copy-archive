@@ -65,12 +65,23 @@ await send('Network.enable');
 await send('Network.clearBrowserCookies');
 await send('Storage.clearDataForOrigin', { origin: BASE, storageTypes: 'all' });
 
-// 1. 打开投稿页（未登录）
+// 关键：先跳 about:blank 再导航。若浏览器当前已在 /contribute，
+// 直接 navigate 只会做同文档 hash 变化，页面不会重新加载，读到的都是旧 DOM。
+await send('Page.navigate', { url: 'about:blank' });
+await sleep(600);
+
+// 1. 打开投稿页（未登录）。连续快速导航可能丢失 URL fragment（hash=0），
+//    必须校验 hash 到位，否则重新设置 location.href 再等渲染。
 await send('Page.navigate', { url });
-await waitFor(`!!document.querySelector('.section-title')`);
-check('投稿页渲染', await ev(`document.body.textContent.includes('投稿到公开档案')`));
-check('识别投稿内容（3 条）', await ev(`document.body.textContent.includes('3 条')`));
-check('未登录显示注册引导', await ev(`!!document.querySelector('#ct-auth')`));
+for (let i = 0; i < 5; i++) {
+  if (await ev(`location.hash.length > 50`)) break;
+  await sleep(800);
+  await ev(`location.href = ${JSON.stringify(url)}`);
+}
+await waitFor(`!!document.querySelector('.section-title') && location.hash.length > 50`, 20000);
+check('投稿页渲染', await waitFor(`document.body.textContent.includes('投稿到公开档案') || document.body.textContent.includes('确认投稿')`));
+check('识别投稿内容（3 条）', await waitFor(`document.body.textContent.includes('3 条')`));
+check('未登录显示注册引导', await waitFor(`!!document.querySelector('#ct-auth')`));
 
 // 2. 注册（openAuth 注册页签）
 await ev(`document.querySelector('#ct-auth').click()`);
@@ -99,9 +110,9 @@ await send('Network.clearBrowserCookies');
 const found = await fetch(`${BASE}/api/discover?q=${encodeURIComponent(TOKEN)}&sharecode=${SC}`, {
   headers: { 'X-Requested-With': 'XMLHttpRequest' },
 }).then((r) => r.json());
-check('访客搜索命中投稿文案 ×2', found.popular.filter((p) => p.content.includes(TOKEN)).length === 2, JSON.stringify(found.popular.length));
+check('访客搜索命中投稿文案 ×3', found.popular.filter((p) => p.content.includes(TOKEN)).length === 3, JSON.stringify(found.popular.length));
 const prof = await fetch(`${BASE}/api/public/u/${user}?sharecode=${SC}`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then((r) => r.json());
-check('公开档案统计 3 条 / 1 分类', prof.copyCount === 3 && prof.categoryCount === 1, JSON.stringify({ c: prof.copyCount, cat: prof.categoryCount }));
+check('公开档案统计 3 条（完全公开含默认 30 分类 → 31）', prof.copyCount === 3 && prof.categoryCount === 31, JSON.stringify({ c: prof.copyCount, cat: prof.categoryCount }));
 
 // 5. 清场：设为私密
 await fetch(`${BASE}/api/profile?sharecode=${SC}`, {

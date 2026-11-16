@@ -9,7 +9,8 @@
   // 若网关依赖 sharecode 放行，回跳时必须原样带上，否则会 403。
   (function () {
     var levels = ['./', '../', '../../', '../../../', '../../../../'];
-    var saved = location.pathname + location.search;
+    // hash 必须一并保存：投稿链接把数据放在 #ct= 里，丢了就再也取不回
+    var saved = location.pathname + location.search + location.hash;
     var share = new URLSearchParams(location.search).get('sharecode');
     var suffix = share ? '?sharecode=' + encodeURIComponent(share) : '';
 
