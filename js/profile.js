@@ -2,7 +2,7 @@
 import {
   state, api, route, esc, fmtDate, openAuth, toast, copyText,
   loadCategories, debounce, refreshSession, updateAuthButton, renderRoute, BASE,
-  loadSamples, seedSampleEntries, SHARE_CODE, FULL_VERSION_URL,
+  loadSamples, seedSampleEntries, SHARE_CODE, FULL_VERSION_URL, currentQuery,
 } from './core.js';
 import { copyGrid, bindCopyCards, emptyState, categoryChips, bindChips, pagination } from './ui.js';
 import { openDetail } from './detail.js';
@@ -248,7 +248,10 @@ export function registerProfile() {
     let categories = [];
     try { categories = (await api(`/api/public/u/${encodeURIComponent(username)}/categories`, { quiet: true })).items; } catch { /* 忽略 */ }
 
-    const view = { q: '', category: '', page: 1, cache: [], meta: { items: [], total: 0, hasMore: false, pageSize: state.pageSize } };
+    // 支持从首页分类卡片带 ?category= 进来，直接落到该分类
+    const initialCat = currentQuery().get('category') || '';
+
+    const view = { q: '', category: initialCat, page: 1, cache: [], meta: { items: [], total: 0, hasMore: false, pageSize: state.pageSize } };
     app.innerHTML = `
       <div class="container">
         <section class="profile-hero">
@@ -322,6 +325,15 @@ export function registerProfile() {
       view.category = chip.dataset.pubCat;
       load(1);
     }));
+    // 带 ?category= 进入时激活对应胶囊；分类不可见（部分公开未勾选）则回退全部
+    if (initialCat) {
+      const chip = app.querySelector(`[data-pub-cat="${CSS.escape(initialCat)}"]`);
+      if (chip) {
+        app.querySelectorAll('[data-pub-cat]').forEach((c) => c.classList.toggle('active', c === chip));
+      } else {
+        view.category = '';
+      }
+    }
     await load(1);
   });
 }
