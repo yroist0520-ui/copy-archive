@@ -2,6 +2,7 @@
 import {
   state, api, route, esc, fmtDate, openAuth, toast, copyText,
   loadCategories, debounce, refreshSession, updateAuthButton, renderRoute, BASE,
+  loadSamples, seedSampleEntries,
 } from './core.js';
 import { copyGrid, bindCopyCards, emptyState, categoryChips, bindChips, pagination } from './ui.js';
 import { openDetail } from './detail.js';
@@ -26,6 +27,10 @@ export function registerProfile() {
     const data = await api('/api/copies?pageSize=6&sort=newest', { quiet: true }).catch(() => ({ items: [], total: 0 }));
     const shareUrl = `${location.origin}${BASE.replace(/\/$/, '')}/u/${encodeURIComponent(me.username)}`;
     const publicCats = state.categories.filter((c) => (me.publicCategoryIds || []).includes(c.id));
+    const samples = await loadSamples();
+    const sampleTotal = samples
+      ? samples.groups.reduce((n, g) => n + g.items.reduce((m, i) => m + i.texts.length, 0), 0)
+      : 0;
 
     app.innerHTML = `
       <div class="container">
@@ -77,7 +82,13 @@ export function registerProfile() {
         </section>
 
         <section class="section">
-          <div class="section-head reveal"><span class="section-index">02</span><h2 class="section-title">Privacy</h2><span class="section-note">服务端强制校验，私密文案不会被任何入口访问</span></div>
+          <div class="section-head reveal"><span class="section-index">02</span><h2 class="section-title">Sample entries</h2><span class="section-note">让公开档案先丰富起来</span></div>
+          <div class="notice reveal d1">一键为档案填充 <strong>${sampleTotal || 90} 条</strong>示例文案，覆盖 30 个分类，按分类自动关联并打上语种标签。已存在的相同文案会自动跳过，重复点击不会产生重复数据。</div>
+          <div class="modal-foot reveal d1"><button class="btn btn-sm btn-primary" id="p-seed">填充示例文案</button></div>
+        </section>
+
+        <section class="section">
+          <div class="section-head reveal"><span class="section-index">03</span><h2 class="section-title">Privacy</h2><span class="section-note">服务端强制校验，私密文案不会被任何入口访问</span></div>
           <div class="form-grid reveal d1">
             <div class="field full"><label class="field-label">公开模式</label>
               <div class="check-grid" style="grid-template-columns:repeat(3,1fr);max-height:none">
@@ -93,7 +104,7 @@ export function registerProfile() {
         </section>
 
         <section class="section">
-          <div class="section-head reveal"><span class="section-index">03</span><h2 class="section-title">Share</h2><span class="section-note">任何人无需注册即可浏览公开档案</span></div>
+          <div class="section-head reveal"><span class="section-index">04</span><h2 class="section-title">Share</h2><span class="section-note">任何人无需注册即可浏览公开档案</span></div>
           <div class="notice reveal d1">当前链接指向 <strong>${PRIVACY_LABEL[me.privacy]}</strong> 模式的档案。${me.privacy === 'private' ? '私密模式下访客将无法访问该链接。' : '复制下方链接分享给朋友。'}</div>
           <div class="search-field reveal d1"><span class="mono muted" style="font-size:var(--t-small)">LINK</span>
             <input class="input" id="p-share" readonly value="${esc(shareUrl)}" style="border:0;background:transparent;font-family:var(--mono);font-size:var(--t-small)">
@@ -102,7 +113,7 @@ export function registerProfile() {
         </section>
 
         <section class="section">
-          <div class="section-head reveal"><span class="section-index">04</span><h2 class="section-title">Recent</h2><span class="section-note">最新上传</span></div>
+          <div class="section-head reveal"><span class="section-index">05</span><h2 class="section-title">Recent</h2><span class="section-note">最新上传</span></div>
           <div id="p-recent">${data.items.length ? copyGrid(data.items) : emptyState('EMPTY', '还没有文案', '上传第一条文案，档案就开始生长了。', '<a class="btn btn-sm btn-primary" href="/upload" data-link>＋ 上传</a>')}</div>
         </section>
       </div>`;
@@ -187,6 +198,28 @@ export function registerProfile() {
       const ok = await copyText(shareUrl);
       toast(ok ? '分享链接已复制' : '复制失败，请手动选择链接', ok ? 'ok' : 'error');
     });
+    const seedBtn = app.querySelector('#p-seed');
+    if (seedBtn) {
+      seedBtn.addEventListener('click', async (e) => {
+        e.target.disabled = true;
+        const original = e.target.textContent;
+        e.target.textContent = '正在填充…';
+        try {
+          const res = await seedSampleEntries();
+          toast(res.created
+            ? `已填充 ${res.created} 条示例文案`
+            : '示例文案已全部存在，无需重复填充');
+          await loadCategories();
+          await refreshSession();
+          renderRoute();
+        } catch (err) {
+          toast(err.message || '填充失败', 'error');
+          e.target.textContent = original;
+        } finally {
+          e.target.disabled = false;
+        }
+      });
+    }
     bindCopyCards(app.querySelector('#p-recent'), { onChanged: () => renderRoute(), onDetail: openDetail });
   });
 
