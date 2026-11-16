@@ -1,7 +1,7 @@
 /* 投稿页：把本地/静态版档案的全部或部分文案带入完整版并公开，让所有人可搜索。
  * 数据通过 URL hash（#ct=<url-safe base64>）从静态版带过来，不经过服务器中转。 */
 import {
-  state, api, route, esc, toast, navigate, openAuth, renderRoute,
+  state, api, route, esc, toast, navigate, openAuth, renderRoute, refreshSession,
   FULL_VERSION_URL,
 } from './core.js';
 import { emptyState } from './ui.js';
