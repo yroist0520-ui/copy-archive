@@ -31,6 +31,14 @@ const BASE_NO_SLASH = BASE === '/' ? '' : BASE.replace(/\/$/, '');
  */
 export const SHARE_CODE = new URLSearchParams(location.search).get('sharecode') || '';
 
+/**
+ * 完整版（真实多人后端）入口。
+ * 静态托管版本的文案数据只保存在当前浏览器里，无法被别人访问；
+ * 「去公开档案」引导与本地版的分享提示都指向这个地址。
+ * 换后端地址时只需要改这一处。
+ */
+export const FULL_VERSION_URL = 'https://wbapp-kvp8vfjqdet5wf5ww0viai.app.workbuddy.host/?sharecode=HC3YZORW3G';
+
 /** 应用内路径 → 浏览器可访问的完整路径 */
 function appUrl(path) {
   if (!path.startsWith('/')) return path;
@@ -65,6 +73,9 @@ function markLocalMode() {
   state.localMode = true;
   setLocalMode(true);
   document.documentElement.dataset.mode = 'local';
+  // 页脚的本地版说明只该在静态托管时出现，后端版始终隐藏
+  const foot = document.querySelector('.mode-foot');
+  if (foot) foot.hidden = false;
 }
 
 /* ---------------- API ---------------- */
