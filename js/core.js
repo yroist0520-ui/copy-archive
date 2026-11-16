@@ -1,6 +1,6 @@
 /* COPY ARCHIVE — 核心层：API、路由、状态、UI 原语 */
 
-import { localApi, setLocalMode } from './local-api.js';
+import { localApi, setLocalMode, seedLocalSamples } from './local-api.js';
 
 export const state = {
   user: null,
@@ -258,13 +258,36 @@ export const THEMES = [
   { id: 'paper', label: '纸白' },
   { id: 'ink', label: '墨黑' },
   { id: 'newsprint', label: '新闻纸' },
-];
-
-/** 切换主题并记忆 */
+];/** 切换主题并记忆 */
 export function applyTheme(theme, { remember = true } = {}) {
   state.theme = theme;
   document.documentElement.dataset.theme = theme;
   if (remember) localStorage.setItem('ca_theme', theme);
+}
+
+/** 读取示例文案库（public/samples.json） */
+export async function loadSamples() {
+  try {
+    const res = await fetch(appUrl('/samples.json'), { cache: 'no-store' });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 为当前账号填充示例文案。
+ * 服务器模式走后端接口，静态托管模式用本地适配层实现同一套语义：
+ * 按分类名匹配、自动关联分类、打语种标签、相同文案跳过不重复导入。
+ */
+export async function seedSampleEntries() {
+  if (state.localMode) {
+    const library = await loadSamples();
+    if (!library) throw new Error('示例文案库加载失败');
+    return seedLocalSamples(library);
+  }
+  return api('/api/samples/seed', { method: 'POST', body: {} });
 }
 
 export function updateAuthButton() {
