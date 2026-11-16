@@ -74,8 +74,9 @@ await evaluate(`document.querySelector('#auth-email').value=${JSON.stringify(use
 await evaluate(`document.querySelector('#auth-pass').value='secret123'`);
 await evaluate(`document.querySelector('#auth-name').value='线上验收档案'`);
 await evaluate(`document.querySelector('[data-submit]').click()`);
-await sleep(1200);
-check('线上注册成功', (await evaluate(`document.querySelector('#auth-btn').textContent`)).includes('线上验收'), await evaluate(`document.querySelector('#auth-btn').textContent`));
+// 注册请求要走公网网关，延迟抖动大；轮询等待登录态出现，避免固定 sleep 偶发误判
+const loginOk = await waitFor(`(document.querySelector('#auth-btn')?.textContent || '').includes('线上验收')`, 15000);
+check('线上注册成功', loginOk, await evaluate(`document.querySelector('#auth-btn')?.textContent || ''`));
 
 // 上传（带多分类 + 特殊字符）
 await go('/upload');
@@ -96,9 +97,10 @@ await sleep(800);
 check('线上搜索命中', await evaluate(`document.querySelectorAll('.copy-card').length === 1`));
 check('线上关键词高亮', await evaluate(`!!document.querySelector('mark.hit')`));
 
-// 分享链接
+// 分享链接（Share 区在分类/文案加载后才渲染，固定等待易读到尚未生成的输入框）
 await go('/profile');
-const shareUrl = await evaluate(`document.querySelector('#p-share').value`);
+await waitFor(`!!document.querySelector('#p-share') && !!document.querySelector('#p-share').value`);
+const shareUrl = await evaluate(`document.querySelector('#p-share')?.value || ''`);
 console.log(`  分享链接：${shareUrl}`);
 check('分享链接指向线上域名', String(shareUrl).startsWith(BASE), String(shareUrl));
 check('分享链接含用户名与子路径', String(shareUrl).includes(`/copy-archive/u/${user}`) || String(shareUrl).includes(`/u/${user}`), String(shareUrl));
