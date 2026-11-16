@@ -20,16 +20,17 @@ const send = (method, params = {}) => new Promise((res) => {
 
 await send('Page.enable');
 
-async function shoot(size) {
-  const html = `<!DOCTYPE html><html><body style="margin:0;background:#ffffff">
+async function shoot(size, bg, transparent) {
+  const html = `<!DOCTYPE html><html style="background:${bg}"><body style="margin:0;background:${bg}">
+<style>#s path{stroke:#FFFFFF}</style>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="${size}" height="${size}" id="s">
-  ${SVG.replace(/<\/?svg[^>]*>/g, '').replace(/<title>[\s\S]*?<\/title>/, '')}
+  ${SVG.replace(/<\/?svg[^>]*>/g, '').replace(/<title>[\s\S]*?<\/title>/, '').replace(/<style>[\s\S]*?<\/style>/, '')}
 </svg></body></html>`;
   await send('Page.navigate', { url: 'data:text/html;charset=utf-8,' + encodeURIComponent(html) });
   await new Promise((r) => setTimeout(r, 800));
   await send('Emulation.setDeviceMetricsOverride', { width: size, height: size, deviceScaleFactor: 1, mobile: false });
   await new Promise((r) => setTimeout(r, 300));
-  const shot = await send('Page.captureScreenshot', { format: 'png' });
+  const shot = await send('Page.captureScreenshot', { format: 'png', omitBackground: transparent });
   if (!shot.result?.data) {
     console.error(`capture failed at ${size}:`, JSON.stringify(shot).slice(0, 300));
     throw new Error('no screenshot data');
@@ -38,7 +39,8 @@ async function shoot(size) {
   console.log(`icon-${size}.png ✓`);
 }
 
-await shoot(180);
-await shoot(32);
-await shoot(16);
+// 180：iOS 主屏不支持透明，用墨色底白书形；32/16：透明底白线条
+await shoot(180, '#1A1A1C', false);
+await shoot(32, 'transparent', true);
+await shoot(16, 'transparent', true);
 process.exit(0);

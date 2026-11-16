@@ -28,10 +28,10 @@
 .brand { display: inline-flex; align-items: center; gap: 9px; flex-shrink: 0; }
 .brand-mark {
   display: flex; align-items: center;
-  filter: drop-shadow(0 1px 2px rgba(141, 43, 34, 0.28));
-  transition: transform 0.4s var(--ease), filter 0.4s var(--ease);
+  color: var(--ink);
+  transition: transform 0.4s var(--ease), color 0.4s var(--ease);
 }
-.brand:hover .brand-mark { transform: rotate(-5deg) scale(1.04); filter: drop-shadow(0 2px 5px rgba(141, 43, 34, 0.38)); }
+.brand:hover .brand-mark { transform: rotate(-5deg) scale(1.04); color: var(--accent-ink); }
 .brand-name {
   font-family: var(--font-mono); font-size: var(--t-micro); font-weight: 500;
   letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-soft);
