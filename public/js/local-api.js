@@ -880,3 +880,54 @@ export function resetLocalDb() {
   localStorage.removeItem(SESSION_KEY);
   localStorage.removeItem('ca_mode');
 }
+
+/** 按文案语种自动打标签 */
+function guessTags(text) {
+  const tags = [];
+  if (/[가-힣]/.test(text)) tags.push('韩文');
+  if (/[一-鿿]/.test(text)) tags.push('中文');
+  if (/[A-Za-z]/.test(text)) tags.push('英文');
+  return tags;
+}
+
+/**
+ * 用示例文案库填充当前用户的档案：按分类名匹配，自动关联分类并打语种标签。
+ * 已存在的相同文案会被跳过，重复调用不会产生重复数据。
+ * @param {object} library samples.json 的内容
+ */
+export function seedLocalSamples(library) {
+  const db = readDb();
+  const session = currentSession(db);
+  if (!session) throw new LocalApiError(401, '请先登录');
+  const uid = session.userId;
+
+  const owned = {};
+  db.categories.filter((c) => c.userId === uid).forEach((c) => { owned[c.name] = c.id; });
+  const existing = new Set(db.copies.filter((c) => c.userId === uid).map((c) => c.content));
+
+  let created = 0;
+  let skipped = 0;
+  let step = 0;
+  const base = Date.now();
+  for (const grp of (library && library.groups) || []) {
+    for (const item of grp.items || []) {
+      const cid = owned[item.name];
+      if (!cid) continue;
+      for (const text of item.texts || []) {
+        if (!text || existing.has(text)) { skipped += 1; continue; }
+        step += 1;
+        const ts = new Date(base - step * 1000).toISOString().slice(0, 19) + '+00:00';
+        const id = nextId(db, 'copies');
+        db.copies.push({
+          id, userId: uid, title: '', content: text, note: '',
+          tags: guessTags(text), copyCount: 0, createdAt: ts, updatedAt: ts,
+        });
+        db.copyCategories.push({ copyId: id, categoryId: cid });
+        existing.add(text);
+        created += 1;
+      }
+    }
+  }
+  writeDb(db);
+  return { ok: true, created, skipped };
+}
