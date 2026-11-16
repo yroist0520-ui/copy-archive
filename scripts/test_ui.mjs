@@ -73,17 +73,31 @@ await send('Network.setCacheDisabled', { cacheDisabled: true });
 await send('Network.clearBrowserCookies');
 await send('Runtime.evaluate', { expression: 'localStorage.clear(); sessionStorage.clear();' });
 
-// 1. 首页
+// 1. 首页（本地模式下首次打开会先出现入口选择层，选择「留在这里」再继续）
 await go('/');
+if (process.env.CA_EXPECT_LOCAL === '1') {
+  check('静态版首开出现入口选择层', await waitFor(`!!document.querySelector('#entry-gate')`));
+  check('选择层含两个版本入口', await evaluate(`!!document.querySelector('#gate-full') && !!document.querySelector('#gate-local')`));
+  check('完整版入口指向后端域名', await evaluate(`import('/js/core.js').then(m => String(m.FULL_VERSION_URL).startsWith('https://wbapp-kvp8vfjqdet5wf5ww0viai.app.workbuddy.host'))`));
+  // 选择「建立自己的档案」→ 记住选择并关闭
+  await evaluate(`document.querySelector('#gate-local').click()`);
+  await waitFor(`!document.querySelector('#entry-gate')`);
+  check('选择本地版后入口层关闭', await evaluate(`!document.querySelector('#entry-gate')`));
+  check('选择已记住（localStorage）', await evaluate(`localStorage.getItem('ca_entry_choice') === 'local'`));
+  await go('/');
+  await sleep(400);
+  check('再次打开不再弹选择层', await evaluate(`!document.querySelector('#entry-gate')`));
+  check('静态托管时页脚显示本地模式说明', await evaluate(`!!document.querySelector('.mode-foot') && !document.querySelector('.mode-foot').hidden`));
+  check('顶部不再出现本地模式横幅', await evaluate(`!document.querySelector('#mode-badge')`));
+  check('本地模式数据确实落在浏览器', await evaluate(`!!localStorage.getItem('ca_local_db_v1')`));
+} else {
+  check('后端版不出现入口选择层', await evaluate(`!document.querySelector('#entry-gate')`));
+  check('后端版页脚不显示本地说明', await evaluate(`!document.querySelector('.mode-foot') || document.querySelector('.mode-foot').hidden`));
+}
 check('首页渲染 Hero', await evaluate(`!!document.querySelector('.hero-title')`));
 check('首页渲染搜索区', await evaluate(`!!document.querySelector('#home-q')`));
 check('首页渲染分类网格', await evaluate(`document.querySelectorAll('.category-tile').length >= 10`));
 check('首页渲染推荐/热门区块', await evaluate(`document.querySelectorAll('.section').length >= 5`));
-if (process.env.CA_EXPECT_LOCAL === '1') {
-  check('静态托管时页脚显示本地模式说明', await evaluate(`!!document.querySelector('.mode-foot')`));
-  check('顶部不再出现本地模式横幅', await evaluate(`!document.querySelector('#mode-badge')`));
-  check('本地模式数据确实落在浏览器', await evaluate(`!!localStorage.getItem('ca_local_db_v1')`));
-}
 
 // 2. 注册
 const stamp = String(Date.now()).slice(-6);
@@ -166,11 +180,17 @@ await evaluate(`document.querySelector('#cat-create').click()`);
 await sleep(500);
 check('新建分类生效', await evaluate(`document.body.textContent.includes('UI 新建分类')`));
 
-// 7. 档案与分享
+// 7. 档案与分享（本地版数据无法分享，档案页应引导去完整版）
 await go('/profile');
-await waitFor(`!!document.querySelector('#p-share')`);
-check('个人档案渲染', await evaluate(`!!document.querySelector('#p-share')`));
-check('分享链接包含用户名', await evaluate(`document.querySelector('#p-share').value.includes(${JSON.stringify(user)})`));
+if (process.env.CA_EXPECT_LOCAL === '1') {
+  await waitFor(`document.body.textContent.includes('前往完整版')`);
+  check('本地版档案页引导前往完整版', await evaluate(`!!document.querySelector('a[href*="app.workbuddy.host"]')`));
+  check('本地版不再展示指向静态站的分享链接', await evaluate(`!document.querySelector('#p-share')`));
+} else {
+  await waitFor(`!!document.querySelector('#p-share')`);
+  check('个人档案渲染', await evaluate(`!!document.querySelector('#p-share')`));
+  check('分享链接包含用户名', await evaluate(`document.querySelector('#p-share').value.includes(${JSON.stringify(user)})`));
+}
 await evaluate(`document.querySelector('input[name="privacy"][value="partial"]').click()`);
 await evaluate(`document.querySelector('#p-save-privacy').click()`);
 await sleep(600);

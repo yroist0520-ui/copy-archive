@@ -2,7 +2,7 @@
 import {
   state, api, route, esc, fmtDate, openAuth, toast, copyText,
   loadCategories, debounce, refreshSession, updateAuthButton, renderRoute, BASE,
-  loadSamples, seedSampleEntries, SHARE_CODE,
+  loadSamples, seedSampleEntries, SHARE_CODE, FULL_VERSION_URL,
 } from './core.js';
 import { copyGrid, bindCopyCards, emptyState, categoryChips, bindChips, pagination } from './ui.js';
 import { openDetail } from './detail.js';
@@ -105,14 +105,23 @@ export function registerProfile() {
           <div class="modal-foot"><button class="btn btn-sm btn-primary" id="p-save-privacy">保存隐私设置</button></div>
         </section>
 
+        ${state.localMode ? `
+        <section class="section">
+          <div class="section-head reveal"><span class="section-index">04</span><h2 class="section-title">Share</h2><span class="section-note">本地版无法分享 · 数据只在当前浏览器</span></div>
+          <div class="notice reveal d1">这是<strong>本地版</strong>：档案与文案只保存在当前设备的浏览器里，分享出去的链接别人打不开、也看不到你的文案。</div>
+          <div class="reveal d1" style="margin-top:12px;display:flex;gap:12px;flex-wrap:wrap">
+            <a class="btn btn-sm btn-primary" href="${esc(FULL_VERSION_URL)}" target="_blank" rel="noopener">前往完整版 · 档案可分享给任何人 ↗</a>
+            <a class="btn btn-sm" href="/archive" data-link>继续整理本地文案</a>
+          </div>
+        </section>` : `
         <section class="section">
           <div class="section-head reveal"><span class="section-index">04</span><h2 class="section-title">Share</h2><span class="section-note">任何人无需注册即可浏览公开档案</span></div>
-          <div class="notice reveal d1">当前链接指向 <strong>${PRIVACY_LABEL[me.privacy]}</strong> 模式的档案。${me.privacy === 'private' ? '私密模式下访客将无法访问该链接。' : '复制下方链接分享给朋友。'}</div>
+          <div class="notice reveal d1">当前链接指向 <strong>${PRIVACY_LABEL[me.privacy]}</strong> 模式的档案。${me.privacy === 'private' ? '私密模式下访客将无法访问该链接。' : '复制下方链接分享给朋友，打开就能看到你的文案。'}</div>
           <div class="search-field reveal d1"><span class="mono muted" style="font-size:var(--t-small)">LINK</span>
             <input class="input" id="p-share" readonly value="${esc(shareUrl)}" style="border:0;background:transparent;font-family:var(--mono);font-size:var(--t-small)">
             <button class="btn btn-sm" id="p-copy-link">复制链接</button></div>
           <div style="margin-top:12px"><a class="link-btn" href="/u/${encodeURIComponent(me.username)}" data-link>预览我的公开档案 ↗</a></div>
-        </section>
+        </section>`}
 
         <section class="section">
           <div class="section-head reveal"><span class="section-index">05</span><h2 class="section-title">Recent</h2><span class="section-note">最新上传</span></div>
@@ -196,7 +205,8 @@ export function registerProfile() {
         toast('隐私设置已保存'); renderRoute();
       } catch { /* 已提示 */ } finally { e.target.disabled = false; }
     });
-    app.querySelector('#p-copy-link').addEventListener('click', async () => {
+    const copyLinkBtn = app.querySelector('#p-copy-link');
+    if (copyLinkBtn) copyLinkBtn.addEventListener('click', async () => {
       const ok = await copyText(shareUrl);
       toast(ok ? '分享链接已复制' : '复制失败，请手动选择链接', ok ? 'ok' : 'error');
     });
