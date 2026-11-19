@@ -38,7 +38,7 @@ PBKDF2_ROUNDS = 120_000
 CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Requested-With, Authorization",
+    "Access-Control-Allow-Headers": "Content-Type, X-Requested-With, Authorization, X-CA-Token",
     "Access-Control-Max-Age": "86400",
 }
 
@@ -526,6 +526,10 @@ def request_token(handler):
     Bearer 让静态版本（不同域名）也能使用同一套云端账号；Cookie 保持
     完整版现有行为不变，两者对应同一张 sessions 表。
     """
+    # 部分部署网关会过滤 Authorization / Cookie，但会透传自定义头
+    custom = (handler.headers.get("X-CA-Token") or "").strip()
+    if custom:
+        return custom
     auth = handler.headers.get("Authorization") or ""
     if auth.lower().startswith("bearer "):
         return auth[7:].strip()
