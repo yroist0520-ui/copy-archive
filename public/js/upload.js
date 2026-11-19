@@ -1,6 +1,6 @@
 /* 上传：单条 / 批量换行 / 快速粘贴 / 链接导入（网页抓取 + 图片 OCR），含导入预览、查重、逐条分类 */
 import {
-  state, api, route, esc, requireLogin, openAuth, openModal, toast, loadCategories, appUrl,
+  state, api, route, esc, requireLogin, openAuth, openModal, toast, loadCategories, appUrl, cloudApiUrl,
 } from './core.js';
 import { categoryChips, bindChips } from './ui.js';
 
@@ -294,9 +294,11 @@ export function registerUpload() {
 
       // 图片地址：完整版走同源代理（绕防盗链、OCR 可跨域）；本地版直接用原地址
       // appUrl 自动附加 sharecode——代理抓取自域图片时服务端需要它过网关
-      const imgSrc = (url) => state.localMode
+      const imgSrc = (url) => state.offlineMode
         ? url
-        : appUrl(`/api/proxy-image?url=${encodeURIComponent(url)}`);
+        : state.cloudMode
+          ? cloudApiUrl(`/api/proxy-image?url=${encodeURIComponent(url)}`)
+          : appUrl(`/api/proxy-image?url=${encodeURIComponent(url)}`);
 
       host.innerHTML = `
         <div class="section-head" style="margin-top:28px"><span class="section-index">EXTRACTED</span>
@@ -378,7 +380,7 @@ export function registerUpload() {
                 added.forEach((t) => linesData.push({ text: t, keep: true, src: 'ocr' }));
                 imagesData[i].status = added.length ? `识别到 ${added.length} 行` : '未识别到文字';
               } catch {
-                imagesData[i].status = state.localMode ? '识别失败（图片受防盗链保护，请用完整版）' : '识别失败';
+                imagesData[i].status = state.offlineMode ? '识别失败（离线版图片受防盗链保护，请用云端档案）' : '识别失败';
               }
               statusFn(imagesData[i].status);
               renderLineList();
