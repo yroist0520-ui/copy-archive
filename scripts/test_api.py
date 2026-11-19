@@ -18,22 +18,30 @@ def make_client():
     return urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
 
 
-def call(client, method, path, data=None, expect=None):
+def call(client, method, path, data=None, expect=None, headers=None, return_headers=False):
     url = BASE + path
     body = json.dumps(data, ensure_ascii=False).encode("utf-8") if data is not None else None
     req = urllib.request.Request(url, data=body, method=method)
     req.add_header("X-Requested-With", "XMLHttpRequest")
     if body:
         req.add_header("Content-Type", "application/json")
+    for key, value in (headers or {}).items():
+        req.add_header(key, value)
     try:
         with client.open(req, timeout=10) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
+            raw = resp.read().decode("utf-8")
+            payload = json.loads(raw) if raw else {}
             status = resp.status
+            resp_headers = resp.headers
     except urllib.error.HTTPError as exc:
-        payload = json.loads(exc.read().decode("utf-8"))
+        raw = exc.read().decode("utf-8")
+        payload = json.loads(raw) if raw else {}
         status = exc.code
+        resp_headers = exc.headers
     if expect is not None and status != expect:
         raise AssertionError(f"{method} {path} expected {expect}, got {status}: {payload}")
+    if return_headers:
+        return status, payload, resp_headers
     return status, payload
 
 
@@ -54,6 +62,20 @@ def main():
     check("两个账号注册成功", ra["user"]["id"] != rb["user"]["id"])
     _, me = call(a, "GET", "/api/auth/me", expect=200)
     check("会话保持", me["user"]["username"] == ua)
+
+    # 1b. 跨设备会话：注册响应返回 Token，无 Cookie 的“另一台设备”也能登录同一账号
+    check("注册响应返回 Bearer Token", bool(ra.get("token")))
+    other = make_client()
+    _, me_token = call(other, "GET", "/api/auth/me", expect=200,
+                       headers={"Authorization": "Bearer " + ra["token"]})
+    check("Bearer Token 跨设备识别同一账号", me_token["user"]["id"] == ra["user"]["id"])
+
+    # 1c. 跨站预检：静态版（GitHub Pages）可以调用云端 API
+    _, _, cors = call(a, "OPTIONS", "/api/copies", expect=204, return_headers=True,
+                      headers={"Origin": "https://yroist0520-ui.github.io",
+                               "Access-Control-Request-Method": "POST",
+                               "Access-Control-Request-Headers": "authorization,content-type,x-requested-with"})
+    check("CORS 预检放行静态版跨域调用", cors.get("Access-Control-Allow-Origin") == "*")
 
     # 2. 默认分类与自定义分类
     _, cats = call(a, "GET", "/api/categories", expect=200)
