@@ -38,8 +38,12 @@ await send('Network.setCacheDisabled', { cacheDisabled: true });
 await send('Network.clearBrowserCookies');
 await ev(`localStorage.clear()`);
 
-// 0. 通过注册弹窗建立本地档案
-await send('Page.navigate', { url: BASE + '/upload' });
+// 0. 用 ?local=1 显式进入本地离线档案，验证老功能仍可用
+await send('Page.navigate', { url: BASE + '/upload?local=1' });
+await waitFor(`!!document.querySelector('#up-login') || !!document.querySelector('#entry-gate')`, 20000);
+if (await ev(`!!document.querySelector('#gate-skip')`)) {
+  await ev(`document.querySelector('#gate-skip').click()`);
+}
 check('上传页要求登录', await waitFor(`!!document.querySelector('#up-login')`, 20000));
 await ev(`document.querySelector('#up-login').click()`);
 check('注册弹窗打开', await waitFor(`!!document.querySelector('#auth-account')`));
