@@ -177,6 +177,7 @@ export function registerUpload() {
       });
 
       let previewItems = [];
+      let pendingItems = [];
       const saveBtn = pane.querySelector('#b-save');
       pane.querySelector('#b-preview').addEventListener('click', async () => {
         const lines = parseLines(textarea.value);
@@ -188,7 +189,7 @@ export function registerUpload() {
         try {
           const r = await api('/api/copies/check-duplicates', { method: 'POST', body: { contents: lines }, quiet: true });
           existing = r.existing;
-        } catch { /* 查重失败不阻断导入 */ }
+        } catch { /* 查重失败不阻断导入；后端仍会兜底跳过 */ }
         const seen = new Set();
         const dupFlags = lines.map((line) => {
           const dup = Boolean(existing[line]) || seen.has(line);
@@ -196,17 +197,20 @@ export function registerUpload() {
           return dup;
         });
         const dupCount = dupFlags.filter(Boolean).length;
+        const keepCount = lines.length - dupCount;
+        pendingItems = previewItems.filter((_, i) => !dupFlags[i]);
         pane.querySelector('#b-preview-host').innerHTML = `
           <div class="section-head"><span class="section-index">PREVIEW</span><h2 class="section-title">导入预览</h2>
-            <span class="section-note">${lines.length} 条 · ${dupCount} 条疑似重复</span></div>
-          ${dupCount ? `<div class="notice">检测到 ${dupCount} 条与档案中已有内容完全相同（或本次重复）。系统只做提醒，不会擅自删除；你仍可照常保存。</div>` : ''}
+            <span class="section-note">${lines.length} 条 · 跳过 ${dupCount} 条重复 · 导入 ${keepCount} 条</span></div>
+          ${dupCount ? `<div class="notice">检测到 ${dupCount} 条与档案中已有内容相同（或本次重复），这些行会自动跳过，只导入剩余 ${keepCount} 条。</div>` : ''}
           <div class="preview-list">${lines.map((line, i) => `
             <div class="preview-row ${dupFlags[i] ? 'dup' : ''}" data-row="${i}">
               <div class="preview-num">${String(i + 1).padStart(2, '0')}</div>
               <div class="preview-text">${esc(line)}</div>
               <div style="text-align:right">
-                ${dupFlags[i] ? '<div class="preview-flag">重复</div>' : ''}
-                <button class="link-btn" data-row-cat="${i}">分类 ${previewItems[i].categoryIds.length ? '· ' + previewItems[i].categoryIds.length : ''}</button>
+                ${dupFlags[i]
+                  ? '<div class="preview-flag">跳过 · 重复</div>'
+                  : `<button class="link-btn" data-row-cat="${i}">分类 ${previewItems[i].categoryIds.length ? '· ' + previewItems[i].categoryIds.length : ''}</button>`}
               </div>
             </div>`).join('')}</div>`;
         pane.querySelectorAll('[data-row-cat]').forEach((btn) => btn.addEventListener('click', () => {
@@ -221,28 +225,31 @@ export function registerUpload() {
             },
           });
         }));
-        saveBtn.disabled = false;
-        saveBtn.textContent = `确认保存 ${lines.length} 条`;
+        saveBtn.disabled = keepCount === 0;
+        saveBtn.textContent = keepCount ? `确认保存 ${keepCount} 条` : '无可导入文案';
       });
 
       saveBtn.addEventListener('click', async () => {
-        if (!previewItems.length) return;
+        if (!pendingItems.length) return;
         saveBtn.disabled = true;
         saveBtn.textContent = '保存中…';
         try {
           const result = await api('/api/copies/batch', {
-            method: 'POST', body: { items: previewItems },
+            method: 'POST', body: { items: pendingItems },
           });
-          toast(`成功收录 ${result.count} 条文案`);
+          const skipped = Number(result.skipped || 0);
+          toast(result.count
+            ? `成功收录 ${result.count} 条文案${skipped ? `，跳过 ${skipped} 条重复` : ''}`
+            : `全部为重复文案，已跳过 ${skipped} 条`);
           textarea.value = ''; updateCount();
           pane.querySelector('#b-preview-host').innerHTML = '';
-          previewItems = [];
+          previewItems = []; pendingItems = [];
           saveBtn.disabled = true;
           saveBtn.textContent = '确认保存';
           await loadCategories();
         } catch { /* 已提示 */ } finally {
-          saveBtn.disabled = false;
-          if (previewItems.length) saveBtn.textContent = `确认保存 ${previewItems.length} 条`;
+          saveBtn.disabled = !pendingItems.length;
+          if (pendingItems.length) saveBtn.textContent = `确认保存 ${pendingItems.length} 条`;
         }
       });
     }
@@ -417,22 +424,25 @@ export function registerUpload() {
           return dup;
         });
         const dupCount = dupFlags.filter(Boolean).length;
+        const keepIndices = lines.map((_, i) => i).filter((i) => !dupFlags[i]);
+        const keepCount = keepIndices.length;
+        const perItemCats = lines.map(() => [...globalCats]);
         previewHost.innerHTML = `
           <div class="section-head"><span class="section-index">PREVIEW</span><h2 class="section-title">导入预览</h2>
-            <span class="section-note">${lines.length} 条 · ${dupCount} 条疑似重复</span></div>
-          ${dupCount ? `<div class="notice">检测到 ${dupCount} 条与档案中已有内容相同（或本次重复）。仍可照常保存。</div>` : ''}
+            <span class="section-note">${lines.length} 条 · 跳过 ${dupCount} 条重复 · 导入 ${keepCount} 条</span></div>
+          ${dupCount ? `<div class="notice">检测到 ${dupCount} 条与档案中已有内容相同（或本次重复），这些行会自动跳过，只导入剩余 ${keepCount} 条。</div>` : ''}
           <div class="preview-list">${lines.map((line, i) => `
             <div class="preview-row ${dupFlags[i] ? 'dup' : ''}" data-row="${i}">
               <div class="preview-num">${String(i + 1).padStart(2, '0')}</div>
               <div class="preview-text">${esc(line)}</div>
               <div style="text-align:right">
-                ${dupFlags[i] ? '<div class="preview-flag">重复</div>' : ''}
-                <button class="link-btn" data-row-cat="${i}">分类</button>
+                ${dupFlags[i]
+                  ? '<div class="preview-flag">跳过 · 重复</div>'
+                  : `<button class="link-btn" data-row-cat="${i}">分类</button>`}
               </div>
             </div>`).join('')}</div>
-          <div class="modal-foot"><button class="btn btn-sm btn-primary" id="l-save">确认保存 ${lines.length} 条</button></div>`;
+          <div class="modal-foot"><button class="btn btn-sm btn-primary" id="l-save" ${keepCount ? '' : 'disabled'}>${keepCount ? `确认保存 ${keepCount} 条` : '无可导入文案'}</button></div>`;
 
-        const perItemCats = lines.map(() => [...globalCats]);
         previewHost.querySelectorAll('[data-row-cat]').forEach((btn) => btn.addEventListener('click', () => {
           const idx = Number(btn.dataset.rowCat);
           openModal({
@@ -446,19 +456,23 @@ export function registerUpload() {
           });
         }));
         previewHost.querySelector('#l-save').addEventListener('click', async (e) => {
+          if (!keepIndices.length) return;
           e.target.disabled = true;
           e.target.textContent = '保存中…';
           try {
             const result = await api('/api/copies/batch', {
               method: 'POST',
-              body: { items: lines.map((content, i) => ({ content, categoryIds: perItemCats[i], tags })) },
+              body: { items: keepIndices.map((i) => ({ content: lines[i], categoryIds: perItemCats[i], tags })) },
             });
-            toast(`成功收录 ${result.count} 条文案`);
+            const skipped = Number(result.skipped || 0);
+            toast(result.count
+              ? `成功收录 ${result.count} 条文案${skipped ? `，跳过 ${skipped} 条重复` : ''}`
+              : `全部为重复文案，已跳过 ${skipped} 条`);
             previewHost.innerHTML = '';
             await loadCategories();
           } catch { /* 已提示 */ } finally {
-            e.target.disabled = false;
-            e.target.textContent = `确认保存 ${lines.length} 条`;
+            e.target.disabled = !keepIndices.length;
+            e.target.textContent = keepCount ? `确认保存 ${keepCount} 条` : '无可导入文案';
           }
         });
         previewHost.scrollIntoView({ behavior: 'smooth', block: 'start' });

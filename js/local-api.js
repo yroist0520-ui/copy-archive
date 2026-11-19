@@ -623,18 +623,22 @@ async function handle(db, method, path, query, body) {
     return serializeCopy(db, db.copies.find((c) => c.id === id), me.id);
   }
 
-  // ---- 批量上传 ----
+  // ---- 批量上传（跳过重复，只导入剩余文案） ----
   if (path === '/api/copies/batch' && method === 'POST') {
     const me = requireUser(db);
     const rawItems = body.items || [];
     if (!Array.isArray(rawItems) || !rawItems.length) throw new LocalApiError(400, '没有可导入的文案');
     if (rawItems.length > 200) throw new LocalApiError(400, '单次最多导入 200 条');
     const globalCids = resolveCategoryIds(db, me.id, body.categoryIds);
+    const known = new Set(db.copies.filter((c) => c.userId === me.id).map((c) => c.content));
     const ts = nowIso();
     const items = [];
+    let skipped = 0;
     rawItems.forEach((item) => {
       if (!item || typeof item !== 'object') return;
       const content = cleanText(item.content, '文案正文', { required: true });
+      if (known.has(content)) { skipped += 1; return; }
+      known.add(content); // 本次批次内部的重复同样跳过
       const title = cleanText(item.title, '标题', { maxLen: 120 });
       const note = cleanText(item.note, '备注', { maxLen: 2000 });
       const tags = parseTags(item.tags);
@@ -647,7 +651,7 @@ async function handle(db, method, path, query, body) {
       items.push(serializeCopy(db, db.copies.find((c) => c.id === id), me.id));
     });
     writeDb(db);
-    return { items, count: items.length };
+    return { items, count: items.length, skipped };
   }
 
   // ---- 单条文案 ----
