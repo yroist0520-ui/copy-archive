@@ -1,13 +1,13 @@
-/* 入口选择层：静态托管版首次打开时，引导用户选择去完整版（真实多人后端）
- * 还是留在本地版（数据只保存在当前浏览器）。
+/* 入口选择层：静态托管版首次打开时，说明默认使用云端账号（三端通用），
+ * 同时保留「本地离线体验」入口（数据只保存在当前浏览器）。
  *
  * 显示条件：
- *  · 处于本地模式（/api 不可用，说明是纯静态托管）
+ *  · 处于静态托管（同源 /api 不可用）
  *  · 本次会话没有因为「先随便看看」跳过
- *  · 用户没有做过选择（「去公开档案」或「建立自己的档案」都记录在 localStorage）
+ *  · 用户没有做过选择（云端 / 本地离线 都记录在 localStorage）
  * 完整版（有真实后端）不显示——那里本来就是完整体验。
  */
-import { state, FULL_VERSION_URL, toast } from './core.js';
+import { state, toast } from './core.js';
 
 const CHOICE_KEY = 'ca_entry_choice';
 const SEEN_KEY = 'ca_gate_seen';
@@ -32,7 +32,7 @@ export function maybeShowEntryGate() {
   if (sessionStorage.getItem(SEEN_KEY) === '1') return;
   if (document.getElementById('entry-gate')) return;
 
-  const localLabel = hasLocalArchive() ? '继续我的本地档案' : '建立自己的档案';
+  const localLabel = hasLocalArchive() ? '继续我的本地档案' : '本地离线体验';
   const gate = document.createElement('div');
   gate.id = 'entry-gate';
   gate.className = 'entry-gate';
@@ -40,32 +40,33 @@ export function maybeShowEntryGate() {
     <div class="entry-gate-panel">
       <div class="entry-gate-eyebrow">WELCOME · CHOOSE YOUR WAY</div>
       <h1 class="entry-gate-title">Copy<span class="title-outline">Archive</span></h1>
-      <p class="entry-gate-sub">这里有两个版本。完整版的文案存在云端、可以分享给任何人；本地版不用注册，但数据只保存在这台设备的浏览器里。</p>
+      <p class="entry-gate-sub">现在默认使用云端账号：电脑、平板、手机登录同一个账号就能看到同一份档案。只有主动选择离线体验时，数据才只留在这台设备。</p>
       <div class="entry-gate-options">
-        <button class="entry-gate-card" id="gate-full">
-          <span class="entry-gate-badge">FULL</span>
-          <span class="entry-gate-name">去公开档案</span>
-          <span class="entry-gate-desc">真实多人共享 · 云端保存 · 档案可分享给任何人打开浏览</span>
-          <span class="entry-gate-go">前往完整版 ↗</span>
+        <button class="entry-gate-card" id="gate-cloud">
+          <span class="entry-gate-badge">CLOUD</span>
+          <span class="entry-gate-name">云端档案（推荐）</span>
+          <span class="entry-gate-desc">与完整版共用账号 · 三端通用 · 档案可分享给任何人</span>
+          <span class="entry-gate-go">留在这里 →</span>
         </button>
         <button class="entry-gate-card entry-gate-card-local" id="gate-local">
           <span class="entry-gate-badge">LOCAL</span>
           <span class="entry-gate-name">${localLabel}</span>
-          <span class="entry-gate-desc">无需注册 · 就地体验全部功能 · 分享链接无法让别人看到文案</span>
-          <span class="entry-gate-go">留在这里 →</span>
+          <span class="entry-gate-desc">无需注册 · 数据只保存在当前浏览器 · 换设备看不到</span>
+          <span class="entry-gate-go">离线体验 →</span>
         </button>
       </div>
       <button class="entry-gate-skip" id="gate-skip">先随便看看</button>
     </div>`;
 
-  gate.querySelector('#gate-full').addEventListener('click', () => {
-    localStorage.setItem(CHOICE_KEY, 'full');
-    location.href = FULL_VERSION_URL;
+  gate.querySelector('#gate-cloud').addEventListener('click', () => {
+    localStorage.setItem(CHOICE_KEY, 'cloud');
+    close(gate);
+    toast('已进入云端档案 · 账号三端通用');
   });
   gate.querySelector('#gate-local').addEventListener('click', () => {
     localStorage.setItem(CHOICE_KEY, 'local');
-    close(gate);
-    toast('已进入本地版 · 文案数据保存在当前浏览器');
+    // 重新加载让会话模式切换为本地离线档案
+    location.reload();
   });
   gate.querySelector('#gate-skip').addEventListener('click', () => {
     sessionStorage.setItem(SEEN_KEY, '1');
