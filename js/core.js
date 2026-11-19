@@ -135,7 +135,11 @@ export async function api(path, { method = 'GET', body, quiet = false } = {}) {
     credentials: state.cloudMode ? 'omit' : 'same-origin',
     headers: { 'X-Requested-With': 'XMLHttpRequest' },
   };
-  if (token) options.headers['Authorization'] = `Bearer ${token}`;
+  if (token) {
+    options.headers['Authorization'] = `Bearer ${token}`;
+    // 部分部署网关会剥离标准鉴权头，但会透传自定义头，双写更稳
+    options.headers['X-CA-Token'] = token;
+  }
   if (body !== undefined) {
     options.headers['Content-Type'] = 'application/json';
     options.body = JSON.stringify(body);
