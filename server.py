@@ -1032,7 +1032,7 @@ def handle_api(handler, method, path, query, conn):
         conn.executemany("INSERT INTO copy_categories (copy_id, category_id) VALUES (?, ?)", [(cid, x) for x in cids])
         return 201, serialize_copy(conn, conn.execute("SELECT * FROM copies WHERE id = ?", (cid,)).fetchone(), me["id"])
 
-    # ---- 批量上传 ----
+    # ---- 批量上传（跳过重复，只导入剩余文案） ----
     if path == "/api/copies/batch" and method == "POST":
         me = require_auth(handler, conn)
         body = read_body(handler)
@@ -1042,12 +1042,21 @@ def handle_api(handler, method, path, query, conn):
         if len(raw_items) > 200:
             raise ApiError(400, "单次最多导入 200 条")
         global_cids = resolve_category_ids(conn, me["id"], body.get("categoryIds"))
+        # 与 check-duplicates 保持一致：按原文精确比对，不做 trim / 改写
+        known = {r["content"] for r in conn.execute(
+            "SELECT content FROM copies WHERE user_id = ?", (me["id"],)
+        )}
         ts = now_iso()
         created = []
+        skipped = 0
         for item in raw_items:
             if not isinstance(item, dict):
                 continue
             content = clean_text(item.get("content"), "文案正文", required=True)
+            if content in known:
+                skipped += 1
+                continue
+            known.add(content)  # 本次批次内部的重复同样跳过
             title = clean_text(item.get("title"), "标题", max_len=120)
             note = clean_text(item.get("note"), "备注", max_len=2000)
             tags = parse_tags(item.get("tags"))
@@ -1068,7 +1077,7 @@ def handle_api(handler, method, path, query, conn):
             item = serialize_copy(conn, r, me["id"], include_categories=False)
             item["categories"] = cat_map.get(r["id"], [])
             items.append(item)
-        return 201, {"items": items, "count": len(items)}
+        return 201, {"items": items, "count": len(items), "skipped": skipped}
 
     m = re.fullmatch(r"/api/copies/(\d+)", path)
     if m:

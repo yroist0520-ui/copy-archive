@@ -90,6 +90,20 @@ def main():
     contents = [x["content"] for x in batch["items"]]
     check("原文空格/标点/Unicode/换行无损", contents == lines, repr(contents))
 
+    # 4b. 批量导入自动跳过重复：已有文案 + 本次内部重复都跳过，只导入剩余文案
+    fresh = "全新的一条 批量去重"
+    _, dedup = call(a, "POST", "/api/copies/batch", {
+        "items": [{"content": text}, {"content": lines[0]}, {"content": lines[0]}, {"content": fresh}],
+        "categoryIds": [short["id"]],
+    }, 201)
+    check("批量去重只导入剩余 1 条", dedup["count"] == 1, str(dedup))
+    check("批量去重跳过 3 条重复", dedup["skipped"] == 3, str(dedup))
+    check("剩余文案内容正确", [x["content"] for x in dedup["items"]] == [fresh], str(dedup["items"]))
+    _, all_dup = call(a, "POST", "/api/copies/batch", {
+        "items": [{"content": text}, {"content": text}],
+    }, 201)
+    check("全部重复时不新增文案", all_dup["count"] == 0 and all_dup["skipped"] == 2, str(all_dup))
+
     # 5. 搜索：正文、标题、分类、标签、多关键词
     _, s1 = call(a, "GET", "/api/copies?q=Dreams", expect=200)
     check("按标题搜索", s1["total"] >= 1)

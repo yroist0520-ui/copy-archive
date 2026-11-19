@@ -666,6 +666,7 @@ html[data-theme="ink"] .archive-card { border-color: rgba(255, 255, 255, 0.1); }
 }
 .preview-row:last-child { border-bottom: 0; }
 .preview-row.dup { background: var(--sand-soft); }
+.preview-row.dup .preview-text { color: var(--faint); }
 .preview-num { font-family: var(--font-mono); font-size: var(--t-micro); color: var(--faint); }
 .preview-text { font-family: var(--font-serif); font-size: var(--t-small); white-space: pre-wrap; word-break: break-word; line-height: 1.8; }
 .preview-flag { font-family: var(--font-mono); font-size: var(--t-micro); color: #A9843C; }
