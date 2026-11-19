@@ -107,7 +107,7 @@ export function registerProfile() {
           <div class="modal-foot"><button class="btn btn-sm btn-primary" id="p-save-privacy">保存隐私设置</button></div>
         </section>
 
-        ${state.localMode ? `
+        ${state.offlineMode ? `
         <section class="section">
           <div class="section-head reveal"><span class="section-index">04</span><h2 class="section-title">Share</h2><span class="section-note">本地版无法直接分享 · 可投稿到公开档案</span></div>
           <div class="notice reveal d1">这是<strong>本地版</strong>：档案与文案只保存在当前设备的浏览器里，直接发链接别人看不到。两个办法把文案带给别人：<strong>投稿</strong>到完整版的公开档案馆（所有人可搜索、复制），或在完整版建立档案后分享链接。</div>
