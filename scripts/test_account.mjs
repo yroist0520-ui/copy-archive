@@ -73,12 +73,10 @@ try {
 
   // 4. 退出登录
   await ev(`document.querySelector('#p-logout').click()`);
-  await sleep(2500);
-  check('退出后回到首页', await ev(`location.pathname === '/' || location.pathname.endsWith('/')`));
-  check('退出后 auth 按钮变登录', await ev(`document.querySelector('#auth-btn')?.textContent.trim() === '登录'`));
+  check('退出后回到首页', await waitFor(`location.pathname === '/' || location.pathname.endsWith('/')`, 10000));
+  check('退出后 auth 按钮变登录', await waitFor(`document.querySelector('#auth-btn')?.textContent.trim() === '登录'`, 10000));
   await send('Page.navigate', { url: withShare('/profile') });
-  await sleep(2500);
-  check('退出后 /profile 回到登录引导', await ev(`!!document.querySelector('#p-login')`));
+  check('退出后 /profile 回到登录引导', await waitFor(`!!document.querySelector('#p-login')`, 12000));
 
   // 5. 账号B 数据仍在（重新登录）
   await ev(`document.querySelector('#p-login')?.click()`);
