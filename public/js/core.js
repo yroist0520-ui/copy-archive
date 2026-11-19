@@ -357,7 +357,6 @@ export function openAuth(initial = 'login') {
         <label class="field-label" for="auth-account">${isLogin ? '用户名 / 邮箱' : '用户名'}</label>
         <input class="input" id="auth-account" autocomplete="username" placeholder="${isLogin ? 'yourname' : '3–20 位字母数字下划线'}">
       </div>
-      ${isLogin ? '' : `<div class="field"><label class="field-label" for="auth-email">邮箱</label><input class="input" id="auth-email" type="email" placeholder="you@example.com"></div>`}
       <div class="field">
         <label class="field-label" for="auth-pass">密码</label>
         <input class="input" id="auth-pass" type="password" autocomplete="${isLogin ? 'current-password' : 'new-password'}" placeholder="至少 6 位">
@@ -380,7 +379,6 @@ export function openAuth(initial = 'login') {
             method: 'POST',
             body: {
               username: account,
-              email: root.querySelector('#auth-email').value.trim(),
               password,
               displayName: root.querySelector('#auth-name').value.trim() || undefined,
             },

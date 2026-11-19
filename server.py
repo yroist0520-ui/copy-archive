@@ -839,13 +839,17 @@ def handle_api(handler, method, path, query, conn):
     if method == "POST" and path == "/api/auth/register":
         body = read_body(handler)
         username = validate_username(body.get("username"))
-        email = validate_email(body.get("email"))
+        # 邮箱改为可选：未提供时用用户名派生唯一占位邮箱，满足 email 列的 NOT NULL UNIQUE 约束。
+        # 用户名本身已强制唯一（3–20 位字母数字下划线），派生出的占位邮箱天然不会撞车。
+        raw_email = body.get("email")
+        email_provided = isinstance(raw_email, str) and bool(raw_email.strip())
+        email = validate_email(raw_email) if email_provided else f"{username.lower()}@noemail.local"
         password = body.get("password")
         if not isinstance(password, str) or len(password) < 6:
             raise ApiError(400, "密码至少需要 6 位")
         display_name = clean_text(body.get("displayName") or username, "昵称", max_len=40) or username
         if conn.execute("SELECT 1 FROM users WHERE username = ? COLLATE NOCASE OR email = ? COLLATE NOCASE", (username, email)).fetchone():
-            raise ApiError(409, "用户名或邮箱已被注册")
+            raise ApiError(409, "用户名或邮箱已被注册" if email_provided else "用户名已被注册")
         conn.execute("BEGIN IMMEDIATE")
         cur = conn.execute(
             "INSERT INTO users (username, email, password_hash, created_at) VALUES (?, ?, ?, ?)",
