@@ -7,7 +7,9 @@ export const state = {
   categories: [],
   theme: 'paper',
   pageSize: 24,
-  localMode: false,
+  localMode: false,   // 当前站点没有同源后端（GitHub Pages 静态版）
+  cloudMode: false,   // 静态版默认连完整版云端 API，实现三端账号通用
+  offlineMode: false, // 用户主动选择的本地离线档案（数据只在当前浏览器）
 };
 
 const app = document.getElementById('app');
@@ -32,12 +34,40 @@ const BASE_NO_SLASH = BASE === '/' ? '' : BASE.replace(/\/$/, '');
 export const SHARE_CODE = new URLSearchParams(location.search).get('sharecode') || '';
 
 /**
- * 完整版（真实多人后端）入口。
- * 静态托管版本的文案数据只保存在当前浏览器里，无法被别人访问；
- * 「去公开档案」引导与本地版的分享提示都指向这个地址。
+ * 完整版（真实多人后端）入口，也是静态版默认连接的云端 API 地址。
+ * 静态版与完整版共用账号数据；只有主动选择「本地离线体验」时才改用当前浏览器存储。
  * 换后端地址时只需要改这一处。
  */
 export const FULL_VERSION_URL = 'https://wbapp-kvp8vfjqdet5wf5ww0viai.app.workbuddy.host/?sharecode=HC3YZORW3G';
+
+/**
+ * 云端 API 地址。允许测试/临时部署通过 window.CA_CLOUD_URL 覆盖，
+ * 默认就是完整版本地址，因此静态版注册登录后三端看到的是同一份数据。
+ */
+const CLOUD_URL = new URL(window.CA_CLOUD_URL || FULL_VERSION_URL);
+const CLOUD_ORIGIN = CLOUD_URL.origin;
+const CLOUD_SHARE = CLOUD_URL.searchParams.get('sharecode') || '';
+const TOKEN_KEY = 'ca_cloud_token';
+
+/** 登录令牌：同源用 Cookie，跨站静态版用 Bearer Token */
+export function getToken() {
+  return localStorage.getItem(TOKEN_KEY) || '';
+}
+function setToken(token) {
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+}
+function clearToken() {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+/** 静态版调用云端 API 的完整地址（自动带网关 sharecode） */
+export function cloudApiUrl(path) {
+  const url = new URL(path, `${CLOUD_ORIGIN}/`);
+  if (CLOUD_SHARE && !url.searchParams.has('sharecode')) {
+    url.searchParams.set('sharecode', CLOUD_SHARE);
+  }
+  return url.toString();
+}
 
 /** 应用内路径 → 浏览器可访问的完整路径 */
 export function appUrl(path) {
@@ -71,28 +101,48 @@ export function stripBase(pathname) {
 function markLocalMode() {
   if (state.localMode) return;
   state.localMode = true;
-  setLocalMode(true);
-  document.documentElement.dataset.mode = 'local';
-  // 页脚的本地版说明只该在静态托管时出现，后端版始终隐藏
+  // 只有用户主动选择「本地离线档案」或带 ?local=1 时才留在浏览器本地数据。
+  // 静态深链会先经 404.html 跳回站点根，原始查询串暂存在 ca_redirect，这里要一并读取。
+  const params = new URLSearchParams(location.search);
+  const redirect = sessionStorage.getItem('ca_redirect') || '';
+  if (redirect.includes('?')) {
+    for (const [key, value] of new URLSearchParams(redirect.split('?')[1])) params.set(key, value);
+  }
+  const forcedCloud = params.get('cloud') === '1';
+  const forcedOffline = !forcedCloud && (params.get('local') === '1'
+    || localStorage.getItem('ca_entry_choice') === 'local');
+  state.offlineMode = forcedOffline;
+  state.cloudMode = !forcedOffline;
+  setLocalMode(state.offlineMode);
+  document.documentElement.dataset.mode = state.offlineMode ? 'local' : 'cloud';
+  // 页脚说明区分云端账号版 / 本地离线版
   const foot = document.querySelector('.mode-foot');
-  if (foot) foot.hidden = false;
+  if (foot) {
+    foot.hidden = false;
+    foot.textContent = state.offlineMode
+      ? '本地离线档案 · 数据只保存在当前浏览器'
+      : '静态托管版本 · 与完整版共用云端账号，三端通用';
+  }
 }
 
 /* ---------------- API ---------------- */
 
 export async function api(path, { method = 'GET', body, quiet = false } = {}) {
+  const token = getToken();
   const options = {
     method,
-    credentials: 'same-origin',
+    // 云端跨站调用只用 Bearer Token，不依赖第三方 Cookie
+    credentials: state.cloudMode ? 'omit' : 'same-origin',
     headers: { 'X-Requested-With': 'XMLHttpRequest' },
   };
+  if (token) options.headers['Authorization'] = `Bearer ${token}`;
   if (body !== undefined) {
     options.headers['Content-Type'] = 'application/json';
     options.body = JSON.stringify(body);
   }
 
-  // 已经确认是纯静态托管，直接走本地实现
-  if (state.localMode && path.startsWith('/api/')) {
+  // 用户主动选择的本地离线档案：仍然使用浏览器本地数据
+  if (state.offlineMode && path.startsWith('/api/')) {
     try {
       return await localApi(path, { method, body });
     } catch (err) {
@@ -102,36 +152,28 @@ export async function api(path, { method = 'GET', body, quiet = false } = {}) {
     }
   }
 
+  const target = state.cloudMode && path.startsWith('/api/')
+    ? cloudApiUrl(path)
+    : appUrl(path);
+
   let response;
   try {
-    response = await fetch(appUrl(path), options);
+    response = await fetch(target, options);
   } catch (err) {
-    // 网络不可达：退化为本地模式，保证功能仍可使用
-    if (path.startsWith('/api/')) {
+    // 首次请求才发现没有同源后端：识别后改走云端 API 重试一次
+    if (path.startsWith('/api/') && !state.localMode) {
       markLocalMode();
-      try {
-        return await localApi(path, { method, body });
-      } catch (localErr) {
-        const error = localErr instanceof Error ? localErr : new Error('操作失败');
-        if (!quiet) toast(error.message, 'error');
-        throw error;
-      }
+      return api(path, { method, body, quiet });
     }
     if (!quiet) toast('网络连接失败，请检查网络后重试', 'error');
     throw err;
   }
 
-  // 静态托管下 /api/* 会命中 SPA 回退，返回 HTML 而非 JSON → 判定为无后端
+  // 静态托管下同源 /api/* 会命中 SPA 回退，返回 HTML 而非 JSON → 切云端重试
   const contentType = response.headers.get('content-type') || '';
-  if (path.startsWith('/api/') && !contentType.includes('application/json')) {
+  if (path.startsWith('/api/') && !state.localMode && !contentType.includes('application/json')) {
     markLocalMode();
-    try {
-      return await localApi(path, { method, body });
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error('操作失败');
-      if (!quiet && error.status !== 404) toast(error.message, 'error');
-      throw error;
-    }
+    return api(path, { method, body, quiet });
   }
 
   let payload;
@@ -140,7 +182,13 @@ export async function api(path, { method = 'GET', body, quiet = false } = {}) {
   } catch {
     payload = { error: '服务器返回异常' };
   }
+  if (payload && typeof payload === 'object' && payload.token) {
+    setToken(payload.token);
+    delete payload.token;
+  }
   if (!response.ok) {
+    // 令牌失效时清掉本地凭证，让用户重新登录即可（换设备登录也走这里）
+    if (response.status === 401 && token) clearToken();
     const error = new Error(payload.error || '操作失败');
     error.status = response.status;
     if (!quiet && response.status !== 404) toast(error.message, 'error');
@@ -408,6 +456,7 @@ export function openAuth(initial = 'login') {
 
 export async function logout() {
   try { await api('/api/auth/logout', { method: 'POST', body: {} }); } catch { /* 忽略 */ }
+  clearToken();
   state.user = null;
   updateAuthButton();
   toast('已退出登录');
