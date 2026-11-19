@@ -2,6 +2,7 @@
 const CDP = 'http://127.0.0.1:9222';
 const STATIC = process.env.CA_STATIC || 'http://127.0.0.1:8081';
 const CLOUD = process.env.CA_CLOUD || 'http://127.0.0.1:8765/?sharecode=test';
+const MOD_PATH = new URL('js/core.js', STATIC.endsWith('/') ? STATIC : STATIC + '/').pathname;
 let pass = 0, fail = 0;
 const check = (name, ok, detail = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${!ok && detail ? ' — ' + detail : ''}`);
@@ -57,7 +58,7 @@ async function openStaticUpload() {
 }
 
 async function fillAuth(username, register) {
-  await ev(`import('/js/core.js').then(m=>m.openAuth(${register ? "'register'" : "'login'"}))`);
+  await ev(`import(${JSON.stringify(MOD_PATH)}).then(m=>m.openAuth(${register ? "'register'" : "'login'"}))`);
   await waitFor(`!!document.querySelector('#auth-account')`, 10000);
   await ev(`(()=>{document.querySelector('#auth-account').value=${JSON.stringify(username)};document.querySelector('#auth-pass').value='secret123';document.querySelector('[data-submit]').click()})()`);
 }
@@ -83,10 +84,10 @@ await openStaticUpload();
 await fillAuth(user, false);
 check('设备 B 登录成功', await waitFor(`!!document.querySelector('[data-tab="single"]')`, 20000));
 
-const items = await ev(`import('/js/core.js').then(m=>m.api('/api/copies')).then(d=>d.items||[])`);
+const items = await ev(`import(${JSON.stringify(MOD_PATH)}).then(m=>m.api('/api/copies')).then(d=>d.items||[])`);
 const arr = typeof items === 'string' ? JSON.parse(items) : (Array.isArray(items) ? items : []);
 check('设备 B 看到设备 A 创建的文案', arr.some((c) => c.content === content), JSON.stringify(arr.slice(0, 2)));
-const me = await ev(`import('/js/core.js').then(m=>m.api('/api/auth/me')).then(d=>d.user||{})`);
+const me = await ev(`import(${JSON.stringify(MOD_PATH)}).then(m=>m.api('/api/auth/me')).then(d=>d.user||{})`);
 check('两台设备是同一账号', me && me.username === user, JSON.stringify(me));
 
 const injectedId = injected?.result?.result?.identifier;
