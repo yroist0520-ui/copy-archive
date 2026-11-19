@@ -33,6 +33,15 @@ DB_PATH = Path(os.environ.get("COPY_ARCHIVE_DB") or (DATA_DIR / "copyarchive.db"
 SESSION_MAX_AGE = 60 * 60 * 24 * 30  # 30 天
 PBKDF2_ROUNDS = 120_000
 
+# 跨站调用（GitHub Pages 静态版 → 完整版云端 API）。
+# 使用 Bearer Token 而非 Cookie，因此不需要 Access-Control-Allow-Credentials。
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, X-Requested-With, Authorization",
+    "Access-Control-Max-Age": "86400",
+}
+
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
@@ -511,8 +520,20 @@ def parse_cookies(handler):
     return result
 
 
+def request_token(handler):
+    """登录后凭证：优先 Authorization: Bearer，其次 Cookie。
+
+    Bearer 让静态版本（不同域名）也能使用同一套云端账号；Cookie 保持
+    完整版现有行为不变，两者对应同一张 sessions 表。
+    """
+    auth = handler.headers.get("Authorization") or ""
+    if auth.lower().startswith("bearer "):
+        return auth[7:].strip()
+    return parse_cookies(handler).get("ca_session")
+
+
 def require_auth(handler, conn):
-    token = parse_cookies(handler).get("ca_session")
+    token = request_token(handler)
     if not token:
         raise ApiError(401, "请先登录")
     row = conn.execute(
@@ -526,7 +547,7 @@ def require_auth(handler, conn):
 
 
 def optional_auth(handler, conn):
-    token = parse_cookies(handler).get("ca_session")
+    token = request_token(handler)
     if not token:
         return None
     return conn.execute(
@@ -894,7 +915,7 @@ def handle_api(handler, method, path, query, conn):
 
     # ---- 退出 ----
     if method == "POST" and path == "/api/auth/logout":
-        token = parse_cookies(handler).get("ca_session")
+        token = request_token(handler)
         if token:
             conn.execute("DELETE FROM sessions WHERE token_hash = ?", (token_hash(token),))
         return 200, {"ok": True}
@@ -1349,6 +1370,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
+        for key, value in CORS_HEADERS.items():
+            self.send_header(key, value)
         for key, value in (extra_headers or {}).items():
             self.send_header(key, value)
         self.end_headers()
@@ -1395,6 +1418,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "max-age=86400")
+        for key, value in CORS_HEADERS.items():
+            self.send_header(key, value)
         self.end_headers()
         self.wfile.write(data)
 
@@ -1422,7 +1447,8 @@ class Handler(BaseHTTPRequestHandler):
                         raise ApiError(403, "请求来源校验失败")
                 status, payload = handle_api(self, method, path, query, conn)
                 if isinstance(payload, dict) and "token" in payload:
-                    extra_headers["Set-Cookie"] = self.session_cookie(payload.pop("token"))
+                    # 同时返回给前端存为 Bearer Token：Cookie 跨站不可靠，Token 可让静态版共用账号
+                    extra_headers["Set-Cookie"] = self.session_cookie(payload["token"])
                 if path == "/api/auth/logout" and status == 200:
                     extra_headers["Set-Cookie"] = self.cleared_cookie()
                 self.send_json(status, payload, extra_headers)
@@ -1496,6 +1522,17 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_DELETE(self):
         self.dispatch("DELETE")
+
+    def do_OPTIONS(self):
+        # 静态版跨站调用 API 的预检请求；无需鉴权，直接放行
+        if urllib.parse.urlparse(self.path).path.startswith("/api/"):
+            self.send_response(204)
+            for key, value in CORS_HEADERS.items():
+                self.send_header(key, value)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        else:
+            self.send_error(405)
 
 
 def main():
