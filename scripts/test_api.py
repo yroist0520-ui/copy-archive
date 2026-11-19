@@ -69,12 +69,15 @@ def main():
     _, me_token = call(other, "GET", "/api/auth/me", expect=200,
                        headers={"Authorization": "Bearer " + ra["token"]})
     check("Bearer Token 跨设备识别同一账号", me_token["user"]["id"] == ra["user"]["id"])
+    _, me_custom = call(other, "GET", "/api/auth/me", expect=200,
+                        headers={"X-CA-Token": ra["token"]})
+    check("自定义令牌头跨网关识别同一账号", me_custom["user"]["id"] == ra["user"]["id"])
 
     # 1c. 跨站预检：静态版（GitHub Pages）可以调用云端 API
     _, _, cors = call(a, "OPTIONS", "/api/copies", expect=204, return_headers=True,
                       headers={"Origin": "https://yroist0520-ui.github.io",
                                "Access-Control-Request-Method": "POST",
-                               "Access-Control-Request-Headers": "authorization,content-type,x-requested-with"})
+                               "Access-Control-Request-Headers": "authorization,content-type,x-ca-token,x-requested-with"})
     check("CORS 预检放行静态版跨域调用", cors.get("Access-Control-Allow-Origin") == "*")
 
     # 2. 默认分类与自定义分类
