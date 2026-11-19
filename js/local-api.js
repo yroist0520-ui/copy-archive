@@ -344,16 +344,18 @@ async function handle(db, method, path, query, body) {
     if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
       throw new LocalApiError(400, '用户名需为 3–20 位字母、数字或下划线');
     }
-    const email = String(body.email || '').trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    // 邮箱改为可选：未提供时用用户名派生唯一占位邮箱，兼容已存用户。
+    const rawEmail = String(body.email || '').trim();
+    if (rawEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
       throw new LocalApiError(400, '邮箱格式不正确');
     }
+    const email = rawEmail || `${username.toLowerCase()}@noemail.local`;
     const password = String(body.password || '');
     if (password.length < 6) throw new LocalApiError(400, '密码至少需要 6 位');
     const displayName = cleanText(body.displayName || username, '昵称', { required: true, maxLen: 40 }).trim() || username;
     if (db.users.some((u) => u.username.toLowerCase() === username.toLowerCase()
-      || u.email.toLowerCase() === email.toLowerCase())) {
-      throw new LocalApiError(409, '用户名或邮箱已被注册');
+      || (u.email || '').toLowerCase() === email.toLowerCase())) {
+      throw new LocalApiError(409, rawEmail ? '用户名或邮箱已被注册' : '用户名已被注册');
     }
     const uid = nextId(db, 'users');
     db.users.push({
@@ -387,7 +389,7 @@ async function handle(db, method, path, query, body) {
     const account = String(body.account || '').trim();
     const password = String(body.password || '');
     const user = findUserByName(db, account)
-      || db.users.find((u) => u.email.toLowerCase() === account.toLowerCase());
+      || db.users.find((u) => (u.email || '').toLowerCase() === account.toLowerCase());
     if (!user || !(await verifyPassword(password, user.passwordHash))) {
       throw new LocalApiError(401, '账号或密码不正确');
     }
