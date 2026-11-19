@@ -21,7 +21,7 @@ export function registerProfile() {
   route(/^\/profile$/, async ({ app }) => {
     if (!state.user) {
       app.innerHTML = `<div class="container section">${emptyState('AUTH REQUIRED', '档案需要登录', '登录后可以完善个人档案并生成分享链接。', '<button class="btn btn-sm btn-primary" id="p-login">登录 / 注册</button>')}</div>`;
-      document.getElementById('p-login').addEventListener('click', openAuth);
+      document.getElementById('p-login').addEventListener('click', () => openAuth('login'));
       return;
     }
     await loadCategories();
