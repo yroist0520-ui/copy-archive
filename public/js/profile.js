@@ -1,6 +1,6 @@
 /* 个人档案：编辑、隐私设置、分享链接；公开档案匿名访问与站内搜索 */
 import {
-  state, api, route, esc, fmtDate, openAuth, toast, copyText,
+  state, api, route, esc, fmtDate, openAuth, logout, toast, copyText,
   loadCategories, debounce, refreshSession, updateAuthButton, renderRoute, BASE,
   loadSamples, seedSampleEntries, SHARE_CODE, FULL_VERSION_URL, currentQuery, openModal,
 } from './core.js';
@@ -130,6 +130,15 @@ export function registerProfile() {
           <div class="section-head reveal"><span class="section-index">05</span><h2 class="section-title">Recent</h2><span class="section-note">最新上传</span></div>
           <div id="p-recent">${data.items.length ? copyGrid(data.items) : emptyState('EMPTY', '还没有文案', '上传第一条文案，档案就开始生长了。', '<a class="btn btn-sm btn-primary" href="/upload" data-link>＋ 上传</a>')}</div>
         </section>
+
+        <section class="section">
+          <div class="section-head reveal"><span class="section-index">06</span><h2 class="section-title">Account</h2><span class="section-note">当前身份 @${esc(me.username)}</span></div>
+          <div class="notice reveal d1">切换账号无需先退出：直接登录另一个账号即可，登录成功后会自动进入对方的档案。退出后文案不会丢失，下次登录仍会回到这里。</div>
+          <div class="reveal d1" style="margin-top:12px;display:flex;gap:12px;flex-wrap:wrap">
+            <button class="btn btn-sm btn-primary" id="p-switch">切换账号</button>
+            <button class="btn btn-sm btn-danger" id="p-logout">退出登录</button>
+          </div>
+        </section>
       </div>`;
 
     let themeChoice = me.theme;
@@ -237,6 +246,12 @@ export function registerProfile() {
     }
     const contributeBtn = app.querySelector('#p-contribute');
     if (contributeBtn) contributeBtn.addEventListener('click', () => openContributeModal(me));
+    // 切换账号：直接开登录框（含注册入口）。登录成功后 openAuth 内部会 refreshSession + renderRoute，
+    // 页面自动变为新账号档案；同域新 session 覆盖旧 cookie，无需先退出。
+    const switchBtn = app.querySelector('#p-switch');
+    if (switchBtn) switchBtn.addEventListener('click', () => openAuth('login'));
+    const logoutBtn = app.querySelector('#p-logout');
+    if (logoutBtn) logoutBtn.addEventListener('click', () => logout());
     bindCopyCards(app.querySelector('#p-recent'), { onChanged: () => renderRoute(), onDetail: openDetail });
   });
 
