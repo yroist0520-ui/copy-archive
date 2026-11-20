@@ -445,7 +445,8 @@ export function openAuth(initial = 'login') {
       <p class="field-hint">${state.offlineMode
         ? '当前是本地离线档案：账号只在这台设备有效。完整版账号请先到「我的档案 → 切回云端账号」。'
         : (isLogin ? '登录后账号三端通用，可使用全部管理功能。' : '注册即自动生成 30 个推荐分类，之后可自由管理。')}</p>
-      <button class="link-btn auth-switch" style="margin-top:16px">${isLogin ? '还没有档案？注册 →' : '已有档案？返回登录 →'}</button>`;
+      <button class="link-btn auth-switch" style="margin-top:16px">${isLogin ? '还没有档案？注册 →' : '已有档案？返回登录 →'}</button>
+      <div style="margin-top:10px;font-size:12px"><a class="link-btn" href="./rescue.html">找不到原来的文案？打开数据救援 →</a></div>`;
     root.querySelector('.auth-switch').addEventListener('click', () => render(isLogin ? 'register' : 'login', root));
     root.querySelector('[data-submit]').textContent = isLogin ? '登录' : '创建档案';
     root.querySelector('[data-submit]').onclick = async () => {
