@@ -5,6 +5,7 @@
 import http.cookiejar
 import json
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -237,6 +238,25 @@ def main():
     # 官方档案不可被他人修改
     call(guest, "PUT", "/api/profile", {"bio": "hack"}, 401)
     call(guest, "DELETE", f"/api/copies/{first['id']}", 401)
+
+    # 13. 修改密码：旧密码作废、新密码可用、旧令牌失效、当前设备不掉线
+    pwuser = "pw" + str(int(time.time() * 1000))[-12:]
+    d = make_client()
+    _, reg = call(d, "POST", "/api/auth/register", {"username": pwuser, "password": "oldpass1"}, 200)
+    old_token = reg["token"]
+    call(d, "POST", "/api/auth/change-password", {"oldPassword": "wrongpass", "newPassword": "newpass2"}, 400)
+    _, changed = call(d, "POST", "/api/auth/change-password", {"oldPassword": "oldpass1", "newPassword": "newpass2"}, 200)
+    new_token = changed["token"]
+    check("改密换发新令牌", bool(new_token) and new_token != old_token)
+    call(make_client(), "POST", "/api/auth/login", {"account": pwuser, "password": "oldpass1"}, 401)
+    call(make_client(), "POST", "/api/auth/login", {"account": pwuser, "password": "newpass2"}, 200)
+    e = make_client()
+    _, stale = call(e, "GET", "/api/auth/me", expect=200, headers={"Authorization": "Bearer " + old_token})
+    check("改密后旧令牌失效", stale["user"] is None)
+    _, fresh = call(e, "GET", "/api/auth/me", expect=200, headers={"X-CA-Token": new_token})
+    check("改密后新令牌可用", bool(fresh["user"]) and fresh["user"]["username"] == pwuser)
+    _, me_after = call(d, "GET", "/api/auth/me", expect=200)
+    check("改密后当前设备保持登录", bool(me_after["user"]) and me_after["user"]["username"] == pwuser)
 
     passed = sum(1 for _, ok, _ in results if ok)
     print(f"\n{passed}/{len(results)} 项通过")
