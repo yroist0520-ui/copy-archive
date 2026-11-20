@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#26241f">
+<title>数据救援 · COPY ARCHIVE 文案档案馆</title>
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<style>
+  :root{
+    --ink:#26241f; --ink-2:#4a463e; --paper:#f4f0e6; --paper-2:#ebe5d6;
+    --line:#d8cfba; --accent:#9c3b2e; --accent-soft:#f2e2dc; --ok:#3f6b4f;
+    --shadow:0 10px 34px rgba(38,36,31,.10);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:"Songti SC","STSong","Noto Serif CJK SC",-apple-system,BlinkMacSystemFont,"Segoe UI",serif;
+    line-height:1.7; -webkit-font-smoothing:antialiased;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  .wrap{max-width:880px;margin:0 auto;padding:36px 20px 80px}
+  .brand{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+  .brand svg{width:34px;height:34px;flex:none}
+  .brand-name{font-size:15px;letter-spacing:.18em;font-weight:600}
+  .brand-name span{color:var(--accent)}
+  .eyebrow{font-size:11px;letter-spacing:.3em;color:var(--accent);font-weight:700;margin-top:26px}
+  h1{font-size:clamp(28px,6vw,44px);line-height:1.25;margin:6px 0 10px;letter-spacing:.02em}
+  .lead{color:var(--ink-2);font-size:15px;max-width:640px}
+  .card{
+    background:#fff;border:1px solid var(--line);border-radius:14px;
+    padding:22px;margin-top:26px;box-shadow:var(--shadow);
+  }
+  .card h2{font-size:18px;margin:0 0 6px;display:flex;align-items:center;gap:10px}
+  .card h2 .num{
+    width:26px;height:26px;border-radius:50%;background:var(--ink);color:#fff;
+    font-size:12px;display:grid;place-items:center;font-family:system-ui;flex:none
+  }
+  .hint{font-size:13px;color:#8a8477;margin:0 0 16px}
+  .stat{display:flex;gap:28px;flex-wrap:wrap;padding:14px 0 4px}
+  .stat div{min-width:96px}
+  .stat b{display:block;font-size:30px;font-family:system-ui;font-weight:700;line-height:1.1}
+  .stat small{font-size:12px;color:#8a8477}
+  .stat .hot b{color:var(--accent)}
+  .acct{
+    border:1px solid var(--line);border-radius:11px;padding:15px 16px;margin-top:12px;
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--paper);
+  }
+  .acct.current{border-color:var(--ok);background:#f2f7f2}
+  .acct-main{flex:1;min-width:180px}
+  .acct-name{font-weight:700;font-size:16px}
+  .acct-name .tag{font-size:11px;color:var(--ok);border:1px solid var(--ok);border-radius:20px;padding:1px 9px;margin-left:8px;font-family:system-ui}
+  .acct-meta{font-size:12px;color:#8a8477;margin-top:3px}
+  .acct-count{font-family:system-ui;font-size:13px;color:var(--ink-2)}
+  .acct-count b{font-size:19px;color:var(--accent)}
+  button,.btn{
+    font-family:system-ui,sans-serif;font-size:13px;font-weight:600;cursor:pointer;
+    border:1px solid var(--ink);background:var(--ink);color:#fff;
+    border-radius:9px;padding:9px 16px;transition:.15s;
+  }
+  button:hover{opacity:.86}
+  button.ghost{background:transparent;color:var(--ink)}
+  button.danger{background:var(--accent);border-color:var(--accent)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .row{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px}
+  input,select{
+    font-family:system-ui,sans-serif;font-size:14px;padding:10px 12px;
+    border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);
+    outline:none;flex:1;min-width:140px;
+  }
+  input:focus{border-color:var(--ink)}
+  .msg{margin-top:14px;font-size:13px;padding:11px 14px;border-radius:9px;font-family:system-ui}
+  .msg.ok{background:#eef6ef;color:var(--ok);border:1px solid #cfe3d3}
+  .msg.warn{background:var(--accent-soft);color:var(--accent);border:1px solid #e6c9c0}
+  .msg.hide{display:none}
+  .empty{
+    text-align:center;padding:30px 16px;color:var(--ink-2);
+    border:1px dashed var(--line);border-radius:11px;
+  }
+  .empty .big{font-size:34px;margin-bottom:8px}
+  details{margin-top:12px}
+  summary{cursor:pointer;font-size:13px;color:var(--accent);font-family:system-ui}
+  .foot{text-align:center;color:#a49c8c;font-size:12px;margin-top:46px;font-family:system-ui}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">
+    <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M20 10c-3.5-3-8-3.5-12-2v22c4-1.5 8.5-1 12 2 3.5-3 8-3.5 12-2V8c-4-1.5-8.5-1-12 2Z" stroke="#26241f" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M20 10v22M11 15h6M11 19h6M23 15h6M23 19h6" stroke="#9c3b2e" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>
+    <div class="brand-name">COPY<span>ARCHIVE</span> · 数据救援</div>
+  </div>
+  <div class="eyebrow">RECOVER YOUR ARCHIVE</div>
+  <h1>找回你的文案档案</h1>
+  <p class="lead">这个页面会扫描<strong>当前浏览器</strong>里保存的所有本地档案，列出每个账号的文案数量。即使忘记密码，也可以一键进入任意档案、导出备份。</p>
+
+  <div class="card" id="scanCard">
+    <h2><span class="num">1</span> 扫描本浏览器的本地档案</h2>
+    <p class="hint" id="originHint"></p>
+    <div id="scanResult"><div class="empty"><div class="big">⌛</div>正在扫描…</div></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">2</span> 备份与恢复</h2>
+    <p class="hint">换设备也能带走数据：在存有文案的设备上「导出备份」，到新设备打开本页「导入备份」即可。</p>
+    <div class="row">
+      <button class="ghost" id="btnExport">⬇ 导出浏览器全部数据</button>
+      <button class="ghost" id="btnImport">⬆ 从备份文件恢复</button>
+      <input type="file" id="fileInput" accept="application/json,.json" style="display:none">
+    </div>
+    <div class="msg hide" id="backupMsg"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">3</span> 确认云端账号（可选）</h2>
+    <p class="hint">完整版账号存在云端、三端通用。如果你想确认账号是否在云端，在这里登录测试。</p>
+    <div class="row">
+      <input id="cloudUser" placeholder="账号用户名" autocomplete="username">
+      <input id="cloudPass" type="password" placeholder="密码" autocomplete="current-password">
+      <button id="btnCloud">测试登录</button>
+    </div>
+    <div class="msg hide" id="cloudMsg"></div>
+    <details>
+      <summary>这里的数据都存在哪里？</summary>
+      <p class="hint" style="margin-top:10px">「本地档案」的数据只保存在<strong>你当前使用的这个浏览器</strong>里，不会上传到服务器。不同设备、不同浏览器（如 Chrome 和 Safari）、无痕模式之间都互相独立。所以如果这台设备扫描不到你的档案，请换回当初存文案时的那台设备和浏览器重新打开本页。</p>
+    </details>
+  </div>
+
+  <div class="foot">COPY ARCHIVE · 数据救援工具 · 你的数据始终由你掌控</div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var DB_KEY = 'ca_local_db_v1';
+  var SESSION_KEY = 'ca_local_session';
+
+  function emptyDb() {
+    return { users: [], profiles: [], categories: [], copies: [], copyCategories: [],
+      favorites: [], sessions: [], seq: { users: 0, categories: 0, copies: 0 } };
+  }
+  function readDb() {
+    try {
+      var raw = localStorage.getItem(DB_KEY);
+      if (!raw) return emptyDb();
+      var db = JSON.parse(raw);
+      var e = emptyDb();
+      Object.keys(e).forEach(function (k) { if (db[k] === undefined) db[k] = e[k]; });
+      db.seq = Object.assign({}, e.seq, db.seq || {});
+      return db;
+    } catch (err) { return emptyDb(); }
+  }
+  function writeDb(db) {
+    try { localStorage.setItem(DB_KEY, JSON.stringify(db)); return true; }
+    catch (err) { return false; }
+  }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function nowIso() { return new Date().toISOString().slice(0, 19) + '+00:00'; }
+  function countFor(db, uid) {
+    return db.copies.filter(function (c) { return c.userId === uid; }).length;
+  }
+  function showMsg(id, text, kind) {
+    var el = document.getElementById(id);
+    el.textContent = text;
+    el.className = 'msg ' + (kind || 'ok');
+  }
+
+  document.getElementById('originHint').textContent =
+    '当前页面地址：' + location.origin + location.pathname;
+
+  // ---------- 扫描 ----------
+  function render() {
+    var db = readDb();
+    var host = document.getElementById('scanResult');
+    var curToken = localStorage.getItem(SESSION_KEY);
+    var curSession = db.sessions.find(function (s) { return s.token === curToken; });
+    var curUid = curSession ? curSession.userId : null;
+
+    var total = db.copies.length;
+    if (!db.users.length) {
+      host.innerHTML = '<div class="empty"><div class="big">🗂</div>' +
+        '<strong>这台设备的浏览器里没有找到本地档案</strong>' +
+        '<p class="hint" style="margin:8px 0 0">你的文案可能在另一台设备或另一个浏览器里。请换回当初存文案时的设备/浏览器打开这个页面；如果有备份文件，用下方「从备份文件恢复」。</p></div>';
+      return;
+    }
+
+    var html = '<div class="stat">' +
+      '<div class="hot"><b>' + db.users.length + '</b><small>本地账号</small></div>' +
+      '<div class="hot"><b>' + total + '</b><small>文案总数</small></div>' +
+      '<div><b>' + db.categories.length + '</b><small>分类</small></div></div>';
+
+    db.users.slice().sort(function (a, b) { return countFor(db, b.id) - countFor(db, a.id); })
+      .forEach(function (u) {
+        var prof = db.profiles.find(function (p) { return p.userId === u.id; }) || {};
+        var n = countFor(db, u.id);
+        var isCur = u.id === curUid;
+        html += '<div class="acct' + (isCur ? ' current' : '') + '">' +
+          '<div class="acct-main">' +
+            '<div class="acct-name">' + esc(u.username) + (isCur ? '<span class="tag">当前登录</span>' : '') + '</div>' +
+            '<div class="acct-meta">昵称：' + esc(prof.displayName || u.username) +
+              ' · 注册：' + esc(String(u.createdAt || '').slice(0, 10)) + '</div>' +
+          '</div>' +
+          '<div class="acct-count"><b>' + n + '</b> 条文案</div>' +
+          '<button data-login="' + u.id + '">' + (isCur ? '进入档案' : '一键进入此档案') + '</button>' +
+        '</div>';
+      });
+    host.innerHTML = html;
+
+    host.querySelectorAll('[data-login]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var uid = Number(btn.getAttribute('data-login'));
+        var d = readDb();
+        var token = 'local_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+        d.sessions.push({ token: token, userId: uid, createdAt: nowIso(),
+          expiresAt: new Date(Date.now() + 30 * 864e5).toISOString() });
+        if (!writeDb(d)) { showMsg('backupMsg', '本地存储写入失败，请检查浏览器设置', 'warn'); return; }
+        localStorage.setItem(SESSION_KEY, token);
+        sessionStorage.setItem('ca_offline_session', '1');
+        location.href = './profile?local=1';
+      });
+    });
+  }
+  render();
+
+  // ---------- 导出 ----------
+  document.getElementById('btnExport').addEventListener('click', function () {
+    var db = readDb();
+    var blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'copy-archive-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    showMsg('backupMsg', '已导出 ' + db.users.length + ' 个账号 / ' + db.copies.length + ' 条文案。请妥善保存这个文件。', 'ok');
+  });
+
+  // ---------- 导入 ----------
+  var fileInput = document.getElementById('fileInput');
+  document.getElementById('btnImport').addEventListener('click', function () { fileInput.click(); });
+  fileInput.addEventListener('change', function () {
+    var file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      var incoming;
+      try { incoming = JSON.parse(reader.result); }
+      catch (err) { showMsg('backupMsg', '文件不是有效的 JSON 备份', 'warn'); return; }
+      if (!incoming || !Array.isArray(incoming.users) || !Array.isArray(incoming.copies)) {
+        showMsg('backupMsg', '这个文件不像是 COPY ARCHIVE 的备份', 'warn'); return;
+      }
+      var ok = window.confirm(
+        '即将把这备份恢复到当前浏览器：\n' +
+        incoming.users.length + ' 个账号 / ' + incoming.copies.length + ' 条文案。\n\n' +
+        '点「确定」= 合并进现有数据（同名账号/同 ID 文案不会重复）；\n' +
+        '点「取消」= 放弃本次恢复。'
+      );
+      if (!ok) return;
+      var db = readDb();
+      ['users', 'profiles', 'categories', 'copies', 'copyCategories', 'favorites', 'sessions'].forEach(function (key) {
+        var arr = Array.isArray(incoming[key]) ? incoming[key] : [];
+        var seen = {};
+        db[key].forEach(function (x) { if (x && x.id !== undefined) seen[x.id] = 1; });
+        if (key === 'sessions') { seen = {}; db[key].forEach(function (x) { if (x && x.token) seen[x.token] = 1; }); }
+        arr.forEach(function (x) {
+          if (!x) return;
+          var id = (key === 'sessions') ? x.token : x.id;
+          if (id !== undefined && seen[id]) return;
+          if (id !== undefined) seen[id] = 1;
+          db[key].push(x);
+        });
+      });
+      ['users', 'categories', 'copies'].forEach(function (k) {
+        if (incoming.seq && typeof incoming.seq[k] === 'number') {
+          db.seq[k] = Math.max(db.seq[k] || 0, incoming.seq[k]);
+        }
+      });
+      db.copies.forEach(function (c) { db.seq.copies = Math.max(db.seq.copies || 0, c.id || 0); });
+      db.users.forEach(function (u) { db.seq.users = Math.max(db.seq.users || 0, u.id || 0); });
+      if (!writeDb(db)) { showMsg('backupMsg', '恢复失败：无法写入本地存储', 'warn'); return; }
+      showMsg('backupMsg', '恢复完成！当前浏览器现有 ' + db.users.length + ' 个账号 / ' + db.copies.length + ' 条文案。上方列表已刷新。', 'ok');
+      render();
+    };
+    reader.readAsText(file);
+    fileInput.value = '';
+  });
+
+  // ---------- 云端检测 ----------
+  var CLOUD = 'https://wbapp-kvp8vfjqdet5wf5ww0viai.app.workbuddy.host';
+  var SHARE = 'HC3YZORW3G';
+  document.getElementById('btnCloud').addEventListener('click', async function () {
+    var btn = this;
+    var account = document.getElementById('cloudUser').value.trim();
+    var password = document.getElementById('cloudPass').value;
+    if (!account || !password) { showMsg('cloudMsg', '请填写账号和密码', 'warn'); return; }
+    btn.disabled = true; btn.textContent = '检测中…';
+    showMsg('cloudMsg', '正在连接云端…', 'ok');
+    try {
+      var resp = await fetch(CLOUD + '/api/auth/login?sharecode=' + SHARE, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        body: JSON.stringify({ account: account, password: password })
+      });
+      var data = await resp.json();
+      if (!resp.ok) {
+        showMsg('cloudMsg', '云端没有这个账号，或密码不正确（' + (data.error || '登录失败') + '）。你的文案不在这个云端账号里。', 'warn');
+        return;
+      }
+      var token = data.token;
+      var r2 = await fetch(CLOUD + '/api/copies?sharecode=' + SHARE, {
+        headers: { 'X-CA-Token': token || '', 'X-Requested-With': 'XMLHttpRequest' }
+      });
+      var d2 = await r2.json();
+      var n = (d2.items || []).length;
+      showMsg('cloudMsg', '云端登录成功！账号 ' + account + ' 共有 ' + n + ' 条文案。' +
+        (n ? '请在「我的档案」里查看。' : '这个云端档案目前是空的。'), 'ok');
+    } catch (err) {
+      showMsg('cloudMsg', '连接云端失败：' + (err && err.message ? err.message : err) + '，请检查网络。', 'warn');
+    } finally { btn.disabled = false; btn.textContent = '测试登录'; }
+  });
+})();
+</script>
+</body>
+</html>
