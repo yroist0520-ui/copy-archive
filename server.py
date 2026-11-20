@@ -924,6 +924,29 @@ def handle_api(handler, method, path, query, conn):
             conn.execute("DELETE FROM sessions WHERE token_hash = ?", (token_hash(token),))
         return 200, {"ok": True}
 
+    # ---- 修改密码 ----
+    if method == "POST" and path == "/api/auth/change-password":
+        me = require_auth(handler, conn)
+        body = read_body(handler)
+        old_password = str(body.get("oldPassword") or "")
+        new_password = body.get("newPassword")
+        row = conn.execute("SELECT * FROM users WHERE id = ?", (me["id"],)).fetchone()
+        if not row or not verify_password(old_password, row["password_hash"]):
+            raise ApiError(400, "当前密码不正确")
+        if not isinstance(new_password, str) or len(new_password) < 6:
+            raise ApiError(400, "新密码至少需要 6 位")
+        if new_password == old_password:
+            raise ApiError(400, "新密码不能与当前密码相同")
+        conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (hash_password(new_password), me["id"]))
+        # 改密后其他设备的会话全部失效；当前设备换发新令牌，避免自己被踢下线。
+        conn.execute("DELETE FROM sessions WHERE user_id = ?", (me["id"],))
+        token = secrets.token_urlsafe(32)
+        conn.execute(
+            "INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
+            (token_hash(token), me["id"], now_iso(), now_iso(30)),
+        )
+        return 200, {"ok": True, "token": token}
+
     # ---- 当前用户 ----
     if method == "GET" and path == "/api/auth/me":
         if not user:
