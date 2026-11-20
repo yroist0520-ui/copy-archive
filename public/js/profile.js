@@ -3,6 +3,7 @@ import {
   state, api, route, esc, fmtDate, openAuth, logout, toast, copyText,
   loadCategories, debounce, refreshSession, updateAuthButton, renderRoute, BASE,
   loadSamples, seedSampleEntries, SHARE_CODE, FULL_VERSION_URL, currentQuery, openModal,
+  openChangePassword, switchToCloud, confirmDialog,
 } from './core.js';
 import { copyGrid, bindCopyCards, emptyState, categoryChips, bindChips, pagination } from './ui.js';
 import { openDetail } from './detail.js';
@@ -133,9 +134,11 @@ export function registerProfile() {
 
         <section class="section">
           <div class="section-head reveal"><span class="section-index">06</span><h2 class="section-title">Account</h2><span class="section-note">当前身份 @${esc(me.username)}</span></div>
-          <div class="notice reveal d1">切换账号无需先退出：直接登录另一个账号即可，登录成功后会自动进入对方的档案。退出后文案不会丢失，下次登录仍会回到这里。</div>
+          <div class="notice reveal d1">当前使用<strong>${state.offlineMode ? '本地离线档案（数据只在这台设备）' : '云端账号（电脑 / 平板 / 手机通用）'}</strong>。切换账号无需先退出；退出后文案不会丢失。${state.offlineMode ? '如果完整版也有账号，请切回云端，否则两边账号和数据互不相通。' : ''}</div>
           <div class="reveal d1" style="margin-top:12px;display:flex;gap:12px;flex-wrap:wrap">
             <button class="btn btn-sm btn-primary" id="p-switch">切换账号</button>
+            <button class="btn btn-sm" id="p-change-pw">修改密码</button>
+            ${state.offlineMode ? '<button class="btn btn-sm" id="p-cloud">切回云端账号</button>' : ''}
             <button class="btn btn-sm btn-danger" id="p-logout">退出登录</button>
           </div>
         </section>
@@ -250,6 +253,16 @@ export function registerProfile() {
     // 页面自动变为新账号档案；同域新 session 覆盖旧 cookie，无需先退出。
     const switchBtn = app.querySelector('#p-switch');
     if (switchBtn) switchBtn.addEventListener('click', () => openAuth('login'));
+    const changePwBtn = app.querySelector('#p-change-pw');
+    if (changePwBtn) changePwBtn.addEventListener('click', () => openChangePassword());
+    const cloudBtn = app.querySelector('#p-cloud');
+    if (cloudBtn) cloudBtn.addEventListener('click', async () => {
+      const ok = await confirmDialog(
+        '切回云端后需要用云端账号重新登录。本地档案仍保留在浏览器，随时可用 ?local=1 查看。',
+        { title: '切换账号体系', danger: false, okText: '切回云端' },
+      );
+      if (ok) switchToCloud();
+    });
     const logoutBtn = app.querySelector('#p-logout');
     if (logoutBtn) logoutBtn.addEventListener('click', () => logout());
     bindCopyCards(app.querySelector('#p-recent'), { onChanged: () => renderRoute(), onDetail: openDetail });
