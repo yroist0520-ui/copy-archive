@@ -947,6 +947,45 @@ export function localUserCount() {
   return readDb().users.length;
 }
 
+/** 本地档案概览：是否有账号、文案、以及有效会话。用于静态版判断默认进入哪种模式。 */
+export function localArchiveInfo() {
+  try {
+    const db = readDb();
+    const token = localStorage.getItem(SESSION_KEY);
+    const session = token ? db.sessions.find((s) => s.token === token) : null;
+    return {
+      users: db.users.length,
+      copies: db.copies.length,
+      hasSession: !!(session && findUser(db, session.userId)),
+    };
+  } catch {
+    return { users: 0, copies: 0, hasSession: false };
+  }
+}
+
+/**
+ * 在本地档案中核对账号密码（登录报错时用）。
+ * 返回 { matched, username, copies }；密码错误或账号不存在时 matched=false。
+ */
+export async function checkLocalAccount(account, password) {
+  try {
+    const db = readDb();
+    const key = String(account || '').trim().toLowerCase();
+    const user = db.users.find((u) => u.username.toLowerCase() === key
+      || (u.email || '').toLowerCase() === key);
+    if (!user || !(await verifyPassword(String(password || ''), user.passwordHash))) {
+      return { matched: false };
+    }
+    return {
+      matched: true,
+      username: user.username,
+      copies: db.copies.filter((c) => c.userId === user.id).length,
+    };
+  } catch {
+    return { matched: false };
+  }
+}
+
 /**
  * 执行一次本地 API 调用，契约与后端完全一致。
  * @param {string} fullPath 含查询串的完整路径，如 /api/copies?q=abc
