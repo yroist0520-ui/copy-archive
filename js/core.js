@@ -56,8 +56,22 @@ export function getToken() {
 function setToken(token) {
   if (token) localStorage.setItem(TOKEN_KEY, token);
 }
-function clearToken() {
+export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
+}
+
+/**
+ * 从本地离线档案切回云端账号。
+ * 离线模式曾把账号写进浏览器自己的库，和云端是两套数据；
+ * 清掉模式标记后刷新，用户用同一个账号密码登录即可看到云端（三端通用）档案。
+ * 本地档案数据仍保留在浏览器，随时可用 ?local=1 再看。
+ */
+export function switchToCloud() {
+  localStorage.removeItem('ca_entry_choice');
+  localStorage.removeItem('ca_mode');
+  sessionStorage.removeItem('ca_offline_session');
+  clearToken();
+  location.reload();
 }
 
 /** 静态版调用云端 API 的完整地址（自动带网关 sharecode） */
@@ -108,9 +122,15 @@ function markLocalMode() {
   if (redirect.includes('?')) {
     for (const [key, value] of new URLSearchParams(redirect.split('?')[1])) params.set(key, value);
   }
+  // 旧版把「本地版」永久记在 localStorage，导致设备长期困在与云端隔离的账号体系：
+  // 同一账号在两端密码错误、头像文案对不上。这里迁移为仅本次会话有效。
+  if (localStorage.getItem('ca_entry_choice') === 'local') {
+    localStorage.removeItem('ca_entry_choice');
+    sessionStorage.setItem('ca_offline_session', '1');
+  }
   const forcedCloud = params.get('cloud') === '1';
   const forcedOffline = !forcedCloud && (params.get('local') === '1'
-    || localStorage.getItem('ca_entry_choice') === 'local');
+    || sessionStorage.getItem('ca_offline_session') === '1');
   state.offlineMode = forcedOffline;
   state.cloudMode = !forcedOffline;
   setLocalMode(state.offlineMode);
@@ -329,12 +349,16 @@ export function confirmDialog(message, { title = '请确认', danger = true, okT
 /* ---------------- 会话 ---------------- */
 
 export async function refreshSession() {
+  let data = null;
   try {
-    const data = await api('/api/auth/me', { quiet: true });
-    state.user = data.user;
+    data = await api('/api/auth/me', { quiet: true });
+    state.user = data.user || null;
   } catch {
     state.user = null;
   }
+  // 云端令牌失效时后端返回 200 + user:null（不是 401），
+  // 不清掉本地凭证就会一直卡在「看起来登录了、页面却提示登录」的状态。
+  if (!state.user && data && state.cloudMode && getToken()) clearToken();
   // 手动切换过的主题优先记忆，其次沿用账号保存的主题
   const saved = localStorage.getItem('ca_theme');
   state.theme = saved || (state.user && state.user.theme) || 'paper';
@@ -414,7 +438,9 @@ export function openAuth(initial = 'login') {
         <input class="input" id="auth-pass" type="password" autocomplete="${isLogin ? 'current-password' : 'new-password'}" placeholder="至少 6 位">
       </div>
       ${isLogin ? '' : `<div class="field"><label class="field-label" for="auth-name">显示昵称（选填）</label><input class="input" id="auth-name" placeholder="留空则使用用户名"></div>`}
-      <p class="field-hint">${isLogin ? '登录后可使用全部管理功能。' : '注册即自动生成 30 个推荐分类，之后可自由管理。'}</p>
+      <p class="field-hint">${state.offlineMode
+        ? '当前是本地离线档案：账号只在这台设备有效。完整版账号请先到「我的档案 → 切回云端账号」。'
+        : (isLogin ? '登录后账号三端通用，可使用全部管理功能。' : '注册即自动生成 30 个推荐分类，之后可自由管理。')}</p>
       <button class="link-btn auth-switch" style="margin-top:16px">${isLogin ? '还没有档案？注册 →' : '已有档案？返回登录 →'}</button>`;
     root.querySelector('.auth-switch').addEventListener('click', () => render(isLogin ? 'register' : 'login', root));
     root.querySelector('[data-submit]').textContent = isLogin ? '登录' : '创建档案';
@@ -440,7 +466,13 @@ export function openAuth(initial = 'login') {
         await loadCategories();
         close();
         toast(isLogin ? '欢迎回来' : '档案已建立，开始收集吧');
-        renderRoute();
+        // 首页、发现页或别人的公开档案页登录后，主动进入「我的档案」；
+        // 否则页面只重绘当前路由，用户会误以为登录没生效。
+        if (returnPath === '/' || returnPath === '/discover' || returnPath.startsWith('/u/')) {
+          navigate('/profile');
+        } else {
+          renderRoute();
+        }
       } catch {
         // api 已提示
       } finally {
@@ -448,6 +480,7 @@ export function openAuth(initial = 'login') {
       }
     };
   };
+  const returnPath = stripBase(location.pathname);
   let close;
   close = openModal({
     kicker: 'ARCHIVE ACCESS',
@@ -455,6 +488,43 @@ export function openAuth(initial = 'login') {
     body: '<div class="auth-body"></div>',
     foot: '<button class="btn btn-sm btn-primary" data-submit>登录</button>',
     onMount(root) { render(initial, root); },
+  });
+}
+
+/**
+ * 修改密码：校验旧密码后换发令牌。
+ * 服务端会作废旧令牌（其他设备需重新登录），api() 自动保存新令牌，
+ * 因此当前设备不会掉线。
+ */
+export function openChangePassword() {
+  openModal({
+    kicker: 'SECURITY',
+    title: '修改密码',
+    body: `
+      <div class="field"><label class="field-label" for="pw-old">当前密码</label>
+        <input class="input" id="pw-old" type="password" autocomplete="current-password" placeholder="输入现在的密码"></div>
+      <div class="field"><label class="field-label" for="pw-new">新密码</label>
+        <input class="input" id="pw-new" type="password" autocomplete="new-password" placeholder="至少 6 位"></div>
+      <div class="field"><label class="field-label" for="pw-confirm">确认新密码</label>
+        <input class="input" id="pw-confirm" type="password" autocomplete="new-password" placeholder="再输入一次新密码"></div>
+      <p class="field-hint">修改成功后，其他设备需要用新密码重新登录；当前设备保持登录。</p>`,
+    foot: '<button class="btn btn-sm" data-cancel>取消</button><button class="btn btn-sm btn-primary" data-submit>确认修改</button>',
+    onMount(root, close) {
+      root.querySelector('[data-cancel]').addEventListener('click', close);
+      root.querySelector('[data-submit]').addEventListener('click', async (e) => {
+        const oldPassword = root.querySelector('#pw-old').value;
+        const newPassword = root.querySelector('#pw-new').value;
+        const confirm = root.querySelector('#pw-confirm').value;
+        if (newPassword.length < 6) { toast('新密码至少需要 6 位', 'error'); return; }
+        if (newPassword !== confirm) { toast('两次输入的新密码不一致', 'error'); return; }
+        e.target.disabled = true;
+        try {
+          await api('/api/auth/change-password', { method: 'POST', body: { oldPassword, newPassword } });
+          close();
+          toast('密码已修改，其他设备请重新登录');
+        } catch { /* api 已提示 */ } finally { e.target.disabled = false; }
+      });
+    },
   });
 }
 
