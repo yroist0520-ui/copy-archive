@@ -38,7 +38,7 @@ try {
   // 0. 清理登录态
   await send('Page.navigate', { url: withShare('/') });
   await sleep(3500);
-  await ev(`fetch('/api/auth/logout${SHARE ? '?sharecode=' + SHARE : ''}',{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'}})`);
+  await ev(`fetch('/api/auth/logout${SHARE ? '?sharecode=' + SHARE : ''}',{method:'POST',headers:{'X-Requested-With':'XMLHttpRequest'}}); localStorage.removeItem('ca_cloud_token');`);
   await send('Page.navigate', { url: withShare('/profile') });
   await sleep(3000);
 
