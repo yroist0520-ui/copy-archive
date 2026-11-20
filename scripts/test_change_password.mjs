@@ -95,7 +95,7 @@ try {
   await open(STATIC + '/profile?local=1');
   await ev(`(()=>{const g=document.querySelector('#gate-skip'); if(g) g.click();})()`);
   await sleep(500);
-  check('旧版永久本地标记已迁移为会话级', await ev(`localStorage.getItem('ca_entry_choice') !== 'local' && sessionStorage.getItem('ca_offline_session') === '1'`));
+  check('有本地档案时默认进入本地模式', await ev(`document.documentElement.dataset.mode === 'local'`), String(await ev(`document.documentElement.dataset.mode`)));
   check('离线档案显示本地登录引导', await waitFor(`!!document.querySelector('#p-login')`, 15000));
 
   const localUser = `local${stamp}`;
@@ -109,9 +109,9 @@ try {
   check('离线档案提示切回云端入口', await ev(`!!document.querySelector('#p-cloud')`));
   check('修改密码后仍保持登录', await changePassword('oldpass1', 'newpass2') && await waitFor(`!!document.querySelector('#p-change-pw')`, 8000));
 
-  // 切回云端：清掉会话级离线标记后刷新，应进入云端模式并要求用云端账号登录
-  await ev(`sessionStorage.removeItem('ca_offline_session'); localStorage.removeItem('ca_cloud_token');`);
-  await open(STATIC + '/profile');
+  // 切回云端：带 ?cloud=1 显式切换（有新逻辑：有本地档案时默认本地，需显式选云端）
+  await ev(`sessionStorage.clear(); localStorage.removeItem('ca_cloud_token');`);
+  await open(STATIC + '/profile?cloud=1');
   await ev(`(()=>{const g=document.querySelector('#gate-skip'); if(g) g.click();})()`);
   await sleep(600);
   check('切回云端后不再显示离线切回入口', await waitFor(`document.querySelector('#p-login') && !document.querySelector('#p-cloud')`, 15000));
