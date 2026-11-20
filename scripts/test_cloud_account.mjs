@@ -45,6 +45,9 @@ await send('Network.clearBrowserCookies');
 const injected = await send('Page.addScriptToEvaluateOnNewDocument', {
   source: `window.CA_CLOUD_URL = ${JSON.stringify(CLOUD)};`,
 });
+// 必须先在静态版域下清理，否则清的是上一个测试残留的域
+await send('Page.navigate', { url: STATIC + '/' });
+await waitFor(`!!document.body`, 20000);
 await ev(`localStorage.clear(); sessionStorage.clear()`);
 
 async function openStaticUpload() {
