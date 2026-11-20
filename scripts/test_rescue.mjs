@@ -72,12 +72,14 @@ check('显示一个一键进入按钮', await ev(`!!document.querySelector('[dat
 
 // 2. 一键进入该档案
 await ev(`document.querySelector('[data-login="7"]').click()`);
-await waitFor(`location.pathname.endsWith('/profile') || location.pathname.endsWith('/profile/')`, 20000);
-await sleep(800);
+await waitFor(`location.pathname.includes('profile')`, 20000);
+// 生产环境：深链导航后 404.html 回退 + 模块路由需要时间，等档案内容真正渲染
+await waitFor(`document.body.innerText.includes('yroist') || document.body.innerText.includes('旧档案')`, 20000);
 check('一键登录后跳到我的档案', await ev(`location.pathname.includes('profile')`));
 check('会话 token 写入', await ev(`!!localStorage.getItem('ca_local_session')`));
 check('离线会话标记写入', await ev(`sessionStorage.getItem('ca_offline_session') === '1'`));
 check('档案显示登录用户（非请登录）', await ev(`(() => { const t = document.body.innerText; return t.includes('yroist') || t.includes('旧档案'); })()`));
+check('档案文案数完整（1053）', await ev(`document.body.innerText.includes('1053')`));
 
 // 3. 导出备份：验证 blob 内容含 1053 条
 await send('Page.navigate', { url: BASE + '/rescue.html' });
