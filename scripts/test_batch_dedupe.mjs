@@ -40,6 +40,9 @@ await send('Network.clearBrowserCookies');
 // 0. 注册并预置一条已有文案
 await send('Page.navigate', { url: BASE + '/' });
 await waitFor(`!!document.body`, 20000);
+await ev(`localStorage.removeItem('ca_cloud_token')`);
+await send('Page.navigate', { url: BASE + '/' });
+await waitFor(`!!document.body`, 20000);
 const user = 'ded' + String(Date.now()).slice(-6);
 const reg = await ev(`fetch('/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},body:JSON.stringify({username:'${user}',password:'secret123',displayName:'去重测试'})}).then(r=>r.status).catch(e=>'ERR:'+e.message)`);
 check('注册测试账号（200）', reg === 200);
