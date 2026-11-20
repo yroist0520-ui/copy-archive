@@ -64,7 +64,10 @@ export function maybeShowEntryGate() {
     toast('已进入云端档案 · 账号三端通用');
   });
   gate.querySelector('#gate-local').addEventListener('click', () => {
-    localStorage.setItem(CHOICE_KEY, 'local');
+    // 离线只在当前会话有效，避免旧版那样永久把设备锁在与云端隔离的本地账号里
+    sessionStorage.setItem('ca_offline_session', '1');
+    sessionStorage.setItem(SEEN_KEY, '1');
+    localStorage.removeItem(CHOICE_KEY);
     // 重新加载让会话模式切换为本地离线档案
     location.reload();
   });
