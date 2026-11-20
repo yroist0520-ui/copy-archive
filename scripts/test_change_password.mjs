@@ -34,17 +34,21 @@ async function waitFor(expr, ms = 15000) {
   }
   return false;
 }
-const open = async (url) => { await send('Page.navigate', { url }); await sleep(2500); };
+const open = async (url) => {
+  await send('Page.navigate', { url });
+  await waitFor(`document.readyState === 'complete' && !!document.querySelector('#auth-btn')`, 30000);
+  await sleep(800);
+};
 const stamp = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const user = `pwa_${stamp}`;
 
 async function fillAuth(account, password, mode = 'login') {
   await ev(`document.querySelectorAll('.modal-backdrop').forEach(m=>m.remove())`);
   await ev(`document.querySelector('#auth-btn')?.click()`);
-  await sleep(400);
+  await waitFor(`!!document.querySelector('#auth-account')`, 10000);
   if (mode === 'register') {
     await ev(`(()=>{const s=document.querySelector('.auth-switch'); if(s && /注册/.test(s.textContent)) s.click();})()`);
-    await sleep(400);
+    await waitFor(`!!document.querySelector('#auth-name')`, 10000);
   }
   await ev(`(()=>{const a=document.querySelector('#auth-account'),p=document.querySelector('#auth-pass'); if(a)a.value=${JSON.stringify(account)}; if(p)p.value=${JSON.stringify(password)};})()`);
   await ev(`document.querySelector('.modal [data-submit]')?.click()`);
