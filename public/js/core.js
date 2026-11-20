@@ -1,6 +1,6 @@
 /* COPY ARCHIVE — 核心层：API、路由、状态、UI 原语 */
 
-import { localApi, setLocalMode, seedLocalSamples } from './local-api.js';
+import { localApi, setLocalMode, seedLocalSamples, localArchiveInfo, checkLocalAccount } from './local-api.js';
 
 export const state = {
   user: null,
@@ -122,15 +122,19 @@ function markLocalMode() {
   if (redirect.includes('?')) {
     for (const [key, value] of new URLSearchParams(redirect.split('?')[1])) params.set(key, value);
   }
-  // 旧版把「本地版」永久记在 localStorage，导致设备长期困在与云端隔离的账号体系：
-  // 同一账号在两端密码错误、头像文案对不上。这里迁移为仅本次会话有效。
-  if (localStorage.getItem('ca_entry_choice') === 'local') {
-    localStorage.removeItem('ca_entry_choice');
-    sessionStorage.setItem('ca_offline_session', '1');
-  }
+  // 核心原则：浏览器里已存在本地档案（账号或文案）时，默认进入本地模式。
+  // 否则老用户的本地账号会被带到云端 → 账号密码错误、文案看起来不见了。
+  // 只有全新浏览器、或用户明确选择云端/带 ?cloud=1 时才走云端账号体系。
+  const localInfo = localArchiveInfo();
+  const hasLocalArchive = localInfo.users > 0 || localInfo.copies > 0;
+  const choice = localStorage.getItem('ca_entry_choice');
   const forcedCloud = params.get('cloud') === '1';
-  const forcedOffline = !forcedCloud && (params.get('local') === '1'
-    || sessionStorage.getItem('ca_offline_session') === '1');
+  const forcedOffline = !forcedCloud && (
+    params.get('local') === '1'
+    || sessionStorage.getItem('ca_offline_session') === '1'
+    || choice === 'local'
+    || hasLocalArchive  // 有本地档案数据：留在本地，保证老账号可登录、文案可见
+  );
   state.offlineMode = forcedOffline;
   state.cloudMode = !forcedOffline;
   setLocalMode(state.offlineMode);
@@ -474,7 +478,36 @@ export function openAuth(initial = 'login') {
           renderRoute();
         }
       } catch {
-        // api 已提示
+        // 云端登录失败：若该账号密码其实属于浏览器本地档案，给出一键切换入口。
+        // 老用户曾把文案存在本地，升级到云端默认模式后会在这里卡住。
+        if (isLogin && state.cloudMode && account && password) {
+          const info = await checkLocalAccount(account, password);
+          if (info.matched) {
+            const hint = document.createElement('div');
+            hint.className = 'notice';
+            hint.style.marginTop = '14px';
+            hint.innerHTML = `这个账号在你<strong>当前浏览器的本地档案</strong>里（${info.copies} 条文案）。云端没有它，所以登录失败。`
+              + ' <button class="link-btn" id="auth-use-local">进入本地档案 →</button>';
+            const body = root.querySelector('.auth-body');
+            const older = body.querySelector('#local-login-hint');
+            if (older) older.remove();
+            hint.id = 'local-login-hint';
+            body.appendChild(hint);
+            hint.querySelector('#auth-use-local').addEventListener('click', async () => {
+              await localApi('/api/auth/login', { method: 'POST', body: { account, password } });
+              state.offlineMode = true;
+              state.cloudMode = false;
+              state.localMode = true;
+              setLocalMode(true);
+              document.documentElement.dataset.mode = 'local';
+              await refreshSession();
+              await loadCategories();
+              close();
+              toast('已进入本地档案，文案都还在');
+              navigate('/profile');
+            });
+          }
+        }
       } finally {
         button.disabled = false;
       }
