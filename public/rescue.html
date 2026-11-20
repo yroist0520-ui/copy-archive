@@ -82,6 +82,11 @@
   details{margin-top:12px}
   summary{cursor:pointer;font-size:13px;color:var(--accent);font-family:system-ui}
   .foot{text-align:center;color:#a49c8c;font-size:12px;margin-top:46px;font-family:system-ui}
+  .samples{margin-top:8px;border-top:1px dashed var(--line);padding-top:8px}
+  .samples .sample{font-size:12px;color:var(--ink-2);padding:3px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .samples .sample::before{content:'· ';color:var(--accent)}
+  .samples .sample.more{color:#a49c8c;font-style:italic}
+  .acct-actions{display:flex;flex-direction:column;gap:8px;align-items:stretch}
   a{color:var(--accent)}
 </style>
 </head>
@@ -128,6 +133,12 @@
       <summary>这里的数据都存在哪里？</summary>
       <p class="hint" style="margin-top:10px">「本地档案」的数据只保存在<strong>你当前使用的这个浏览器</strong>里，不会上传到服务器。不同设备、不同浏览器（如 Chrome 和 Safari）、无痕模式之间都互相独立。所以如果这台设备扫描不到你的档案，请换回当初存文案时的那台设备和浏览器重新打开本页。</p>
     </details>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">4</span> 存储诊断</h2>
+    <p class="hint">列出当前网址下保存的所有档案数据。如果你记得当初存过更多文案，这里能看出这个浏览器里到底存了多少。</p>
+    <div id="storageInfo">检测中…</div>
   </div>
 
   <div class="foot">COPY ARCHIVE · 数据救援工具 · 你的数据始终由你掌控</div>
@@ -200,16 +211,29 @@
     db.users.slice().sort(function (a, b) { return countFor(db, b.id) - countFor(db, a.id); })
       .forEach(function (u) {
         var prof = db.profiles.find(function (p) { return p.userId === u.id; }) || {};
-        var n = countFor(db, u.id);
+        var mine = db.copies.filter(function (c) { return c.userId === u.id; });
+        var n = mine.length;
         var isCur = u.id === curUid;
+        var samples = mine.slice(0, 4).map(function (c) {
+          return esc(String(c.content || '').replace(/\s+/g, ' ').slice(0, 46));
+        }).filter(Boolean);
+        var sampleHtml = '';
+        if (samples.length) {
+          sampleHtml = '<div class="samples">' + samples.map(function (t) {
+            return '<div class="sample">' + t + '</div>';
+          }).join('') + (n > 4 ? '<div class="sample more">…还有 ' + (n - 4) + ' 条</div>' : '') + '</div>';
+        }
         html += '<div class="acct' + (isCur ? ' current' : '') + '">' +
           '<div class="acct-main">' +
             '<div class="acct-name">' + esc(u.username) + (isCur ? '<span class="tag">当前登录</span>' : '') + '</div>' +
             '<div class="acct-meta">昵称：' + esc(prof.displayName || u.username) +
               ' · 注册：' + esc(String(u.createdAt || '').slice(0, 10)) + '</div>' +
+            sampleHtml +
           '</div>' +
-          '<div class="acct-count"><b>' + n + '</b> 条文案</div>' +
-          '<button data-login="' + u.id + '">' + (isCur ? '进入档案' : '一键进入此档案') + '</button>' +
+          '<div class="acct-actions">' +
+            '<div class="acct-count"><b>' + n + '</b> 条文案</div>' +
+            '<button data-login="' + u.id + '">' + (isCur ? '进入档案' : '一键进入此档案') + '</button>' +
+          '</div>' +
         '</div>';
       });
     host.innerHTML = html;
@@ -229,6 +253,32 @@
     });
   }
   render();
+
+  // ---------- 存储诊断 ----------
+  (function storageDiag() {
+    var host = document.getElementById('storageInfo');
+    var rows = [];
+    var total = 0;
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var key = localStorage.key(i);
+        var val = localStorage.getItem(key) || '';
+        var bytes = new Blob([val]).size;
+        total += bytes;
+        if (key === DB_KEY) {
+          var d = readDb();
+          rows.push('<div class="acct"><div class="acct-main"><div class="acct-name">' + esc(key) + '</div>' +
+            '<div class="acct-meta">本地档案主数据 · ' + esc((bytes / 1024).toFixed(1)) + ' KB · ' +
+            d.users.length + ' 个账号 / ' + d.copies.length + ' 条文案</div></div></div>');
+        } else if (/^ca_/.test(key)) {
+          rows.push('<div class="acct"><div class="acct-main"><div class="acct-name" style="font-size:14px">' + esc(key) + '</div>' +
+            '<div class="acct-meta">' + esc((bytes / 1024).toFixed(1)) + ' KB</div></div></div>');
+        }
+      }
+    } catch (err) { rows.push('<div class="hint">读取失败：' + esc(err.message) + '</div>'); }
+    host.innerHTML = '<p class="hint">当前网址：' + esc(location.origin + location.pathname) +
+      ' ·共 ' + esc((total / 1024).toFixed(1)) + ' KB 存档数据</p>' + (rows.join('') || '<div class="hint">这个网址下没有任何存档数据。</div>');
+  })();
 
   // ---------- 导出 ----------
   document.getElementById('btnExport').addEventListener('click', function () {
