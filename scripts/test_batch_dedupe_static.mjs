@@ -36,9 +36,11 @@ await send('Runtime.enable');
 await send('Network.enable');
 await send('Network.setCacheDisabled', { cacheDisabled: true });
 await send('Network.clearBrowserCookies');
-await ev(`localStorage.clear()`);
 
 // 0. 用 ?local=1 显式进入本地离线档案，验证老功能仍可用
+await send('Page.navigate', { url: BASE + '/?local=1' });
+await waitFor(`!!document.body`, 20000);
+await ev(`localStorage.clear()`);
 await send('Page.navigate', { url: BASE + '/upload?local=1' });
 await waitFor(`!!document.querySelector('#up-login') || !!document.querySelector('#entry-gate')`, 20000);
 if (await ev(`!!document.querySelector('#gate-skip')`)) {
