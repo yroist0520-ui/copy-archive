@@ -412,6 +412,28 @@ async function handle(db, method, path, query, body) {
     return { ok: true };
   }
 
+  // ---- 修改密码 ----
+  if (method === 'POST' && path === '/api/auth/change-password') {
+    const me = requireUser(db);
+    const oldPassword = String(body.oldPassword || '');
+    const newPassword = body.newPassword;
+    if (!(await verifyPassword(oldPassword, me.passwordHash))) {
+      throw new LocalApiError(400, '当前密码不正确');
+    }
+    if (typeof newPassword !== 'string' || newPassword.length < 6) {
+      throw new LocalApiError(400, '新密码至少需要 6 位');
+    }
+    if (newPassword === oldPassword) throw new LocalApiError(400, '新密码不能与当前密码相同');
+    me.passwordHash = await makeHash(newPassword);
+    // 与服务端一致：其他会话失效，当前设备换发令牌保持在线。
+    db.sessions = db.sessions.filter((s) => s.userId !== me.id);
+    const token = `local_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+    db.sessions.push({ token, userId: me.id, createdAt: nowIso(), expiresAt: new Date(Date.now() + 30 * 864e5).toISOString() });
+    localStorage.setItem(SESSION_KEY, token);
+    writeDb(db);
+    return { ok: true, token };
+  }
+
   // ---- 当前用户 ----
   if (method === 'GET' && path === '/api/auth/me') {
     const session = currentSession(db);
