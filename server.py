@@ -860,22 +860,6 @@ def handle_api(handler, method, path, query, conn):
     if method == "GET" and path == "/api/health":
         return 200, {"ok": True, "time": now_iso()}
 
-    # ---- 一次性拥有者密码重置（临时维护通道，用后即删） ----
-    if method == "POST" and path == "/api/auth/owner-reset":
-        body = read_body(handler)
-        if str(body.get("key") or "") != "6pC3bbkNlhLQgv_hh6fgzTxx7HUkjBoO":
-            raise ApiError(403, "无权限")
-        username = str(body.get("username") or "").strip()
-        password = body.get("password")
-        if not username or not isinstance(password, str) or len(password) < 6:
-            raise ApiError(400, "参数不完整")
-        row = conn.execute("SELECT id FROM users WHERE username = ? COLLATE NOCASE", (username,)).fetchone()
-        if not row:
-            raise ApiError(404, "账号不存在")
-        conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (hash_password(password), row["id"]))
-        conn.execute("DELETE FROM sessions WHERE user_id = ?", (row["id"],))
-        return 200, {"ok": True}
-
     # ---- 注册 ----
     if method == "POST" and path == "/api/auth/register":
         body = read_body(handler)
