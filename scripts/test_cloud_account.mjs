@@ -61,6 +61,7 @@ async function openStaticUpload() {
 }
 
 async function fillAuth(username, register) {
+  await ev(`document.querySelectorAll('.modal-backdrop').forEach(m=>m.remove())`);
   await ev(`import(${JSON.stringify(MOD_PATH)}).then(m=>m.openAuth(${register ? "'register'" : "'login'"}))`);
   await waitFor(`!!document.querySelector('#auth-account')`, 10000);
   await ev(`(()=>{document.querySelector('#auth-account').value=${JSON.stringify(username)};document.querySelector('#auth-pass').value='secret123';document.querySelector('[data-submit]').click()})()`);
