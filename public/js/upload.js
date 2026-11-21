@@ -59,7 +59,62 @@ function cleanOcrLines(text, existingKeys = new Set()) {
   return out;
 }
 
+/** 新建分类按钮的事件委托，整页只注册一次（不随路由/页签渲染重复绑定） */
+let newCatDelegated = false;
+function ensureNewCatDelegation() {
+  if (newCatDelegated) return;
+  newCatDelegated = true;
+  document.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-new-cat]');
+    if (!btn) return;
+    const grid = document.getElementById(btn.dataset.newCat);
+    openModal({
+      kicker: 'NEW CATEGORY', title: '新建分类',
+      body: `<div class="field"><label class="field-label" for="nc-name">分类名称</label>
+          <input class="input" id="nc-name" placeholder="给新分类起个名字" maxlength="30"></div>
+        <div class="field"><label class="field-label" for="nc-color">分类颜色</label>
+          <input type="color" id="nc-color" value="#b23a2b" class="color-input" aria-label="分类颜色"></div>
+        <div class="field-hint">新分类会立刻出现在下面的可选项里并自动选中。</div>`,
+      foot: '<button class="btn btn-sm" data-cancel>取消</button><button class="btn btn-sm btn-primary" data-ok>创建并选用</button>',
+      onMount(root, close) {
+        const nameInput = root.querySelector('#nc-name');
+        root.querySelector('[data-cancel]').onclick = close;
+        const submit = async (ev) => {
+          const name = nameInput.value.trim();
+          if (!name) { toast('请输入分类名称', 'error'); return; }
+          const ok = ev.currentTarget;
+          ok.disabled = true;
+          try {
+            const created = await api('/api/categories', {
+              method: 'POST', body: { name, color: root.querySelector('#nc-color').value },
+            });
+            await loadCategories();
+            toast(`分类「${name}」已创建`);
+            close();
+            // 把新分类 chip 追加到触发处的 grid 并默认选中（保留原有已选）
+            if (grid && !grid.querySelector(`[data-cat="${created.id}"]`)) {
+              grid.insertAdjacentHTML('beforeend', categoryChips([created], [created.id]));
+              const chip = grid.querySelector(`[data-cat="${created.id}"]`);
+              if (chip) {
+                chip.addEventListener('click', () => {
+                  const active = chip.classList.toggle('active');
+                  chip.setAttribute('aria-pressed', String(active));
+                });
+              }
+            }
+          } catch { ok.disabled = false; }
+        };
+        root.querySelector('[data-ok]').onclick = submit;
+        nameInput.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Enter') submit({ currentTarget: root.querySelector('[data-ok]') });
+        });
+      },
+    });
+  });
+}
+
 export function registerUpload() {
+  ensureNewCatDelegation();
   route(/^\/upload$/, async ({ app }) => {
     if (!state.user) {
       app.innerHTML = `<div class="container section" style="padding-top:56px"><div class="empty">
@@ -86,8 +141,9 @@ export function registerUpload() {
     const pane = app.querySelector('#upload-pane');
     let active = 'single';
 
-    function catPicker(id, selected = []) {
-      return `<div class="check-grid" id="${id}">${categoryChips(state.categories, selected)}</div>`;
+    function catPicker(id, selected = [], withNew = true) {
+      return `<div class="check-grid" id="${id}">${categoryChips(state.categories, selected)}</div>
+        ${withNew ? `<button type="button" class="link-btn cat-new-btn" data-new-cat="${id}" style="margin-top:10px">＋ 新建分类</button>` : ''}`;
     }
 
     function render() {
@@ -217,7 +273,7 @@ export function registerUpload() {
           const idx = Number(btn.dataset.rowCat);
           openModal({
             kicker: 'PER ENTRY CATEGORY', title: `第 ${idx + 1} 条的分类`,
-            body: `<p class="field-hint" style="margin-bottom:12px">${esc(previewItems[idx].content.slice(0, 80))}</p>${catPicker('row-cats', previewItems[idx].categoryIds)}`,
+            body: `<p class="field-hint" style="margin-bottom:12px">${esc(previewItems[idx].content.slice(0, 80))}</p>${catPicker('row-cats', previewItems[idx].categoryIds, false)}`,
             foot: '<button class="btn btn-sm btn-primary" data-ok>完成</button>',
             onMount(root, close) {
               bindChips(root.querySelector('#row-cats'), (ids) => { previewItems[idx].categoryIds = ids; });
@@ -360,7 +416,7 @@ export function registerUpload() {
           <div style="margin-top:10px"><button class="btn btn-sm" id="l-ocr-all">识别勾选图片</button>
             <span class="field-hint" style="margin-left:10px">首次识别需下载中文识别引擎（约 10MB），请耐心等待</span></div>` : ''}
         <div class="field"><label class="field-label">统一分类（可单选 / 多选，导入前可逐条改）</label>
-          <div class="check-grid" id="l-cats">${categoryChips(state.categories, [])}</div></div>
+          ${catPicker('l-cats', [])}</div>
         <div class="field"><label class="field-label" for="l-tags">统一标签（选填，逗号分隔）</label><input class="input" id="l-tags"></div>
         <div class="modal-foot"><button class="btn btn-sm btn-primary" id="l-preview">生成导入预览</button></div>
         <div id="l-preview-host" style="margin-top:32px"></div>`;
@@ -482,7 +538,7 @@ export function registerUpload() {
           const idx = Number(btn.dataset.rowCat);
           openModal({
             kicker: 'PER ENTRY CATEGORY', title: `第 ${idx + 1} 条的分类`,
-            body: `<p class="field-hint" style="margin-bottom:12px">${esc(lines[idx].slice(0, 80))}</p>${catPicker('row-cats', perItemCats[idx])}`,
+            body: `<p class="field-hint" style="margin-bottom:12px">${esc(lines[idx].slice(0, 80))}</p>${catPicker('row-cats', perItemCats[idx], false)}`,
             foot: '<button class="btn btn-sm btn-primary" data-ok>完成</button>',
             onMount(root, close) {
               bindChips(root.querySelector('#row-cats'), (ids) => { perItemCats[idx] = ids; });
