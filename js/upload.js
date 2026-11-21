@@ -258,28 +258,61 @@ export function registerUpload() {
 
     function renderLink() {
       pane.innerHTML = `
-        <div class="notice">粘贴文章链接（公众号文章、网页日志…），自动打开链接提取文案：文字按行拆成一条条，图片里的文字可一键识别。导入前可逐条勾选、编辑，可单选或多选分类。</div>
-        <div class="field"><label class="field-label" for="l-url">文章链接</label>
+        <div class="notice">粘贴链接或分享文本，自动提取文案：文字按行拆成一条条，图片里的文字可一键识别。导入前可逐条勾选、编辑，可单选或多选分类。</div>
+        <div class="field"><label class="field-label" for="l-url">文章链接 / 分享文本</label>
           <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <input class="input" id="l-url" placeholder="https://mp.weixin.qq.com/s/…" style="flex:1;min-width:220px">
-            <button class="btn btn-sm btn-primary" id="l-fetch">抓取内容</button>
+            <input class="input" id="l-url" placeholder="粘贴网址，或直接粘贴在 App 里复制的分享文字" style="flex:1;min-width:220px">
+            <button class="btn btn-sm btn-primary" id="l-fetch">提取文案</button>
           </div>
-          <div class="field-hint">支持公众号文章与普通网页；图片较多的页面会自动提取图片供识别。</div></div>
+          <div class="field-hint">支持公众号文章、普通网页；小红书 / 抖音 / 快手的正文需登录，服务端抓不到，请把 App 里复制的<strong>整段分享文字</strong>（不只是网址）粘进来，或把图片存相册用「批量上传 → 图片识别」。</div></div>
         <div id="l-result"></div>`;
 
       const urlInput = pane.querySelector('#l-url');
       const fetchBtn = pane.querySelector('#l-fetch');
+      const resultHost = pane.querySelector('#l-result');
+
+      // 粘贴的是一段文字（含换行/中文，而非纯网址）→ 直接按行拆成文案，不依赖服务端抓取
+      const looksLikeShareText = (s) => {
+        const withoutUrls = s.replace(/https?:\/\/\S+/g, '').trim();
+        return withoutUrls.length >= 2 && /[\u4e00-\u9fff]/.test(withoutUrls);
+      };
+      const shareTextToLines = (s) => s
+        .split(/\r?\n/)
+        .map((line) => line.replace(/https?:\/\/\S+/g, '').replace(/\s+/g, ' ').trim())
+        .filter((line) => line.length >= 2 && /[\u4e00-\u9fffA-Za-z]/.test(line));
+
       const run = async () => {
-        const url = urlInput.value.trim();
-        if (!url) { toast('请先粘贴链接', 'error'); return; }
+        const raw = urlInput.value.trim();
+        if (!raw) { toast('请先粘贴链接或文字', 'error'); return; }
+
+        // 分享文本：本地直接解析
+        if (!/^https?:\/\/\S+$/i.test(raw) && looksLikeShareText(raw)) {
+          const lines = shareTextToLines(raw);
+          if (!lines.length) { toast('没识别到文字内容', 'error'); return; }
+          renderLinkResult({ title: '分享文本', lines, images: [], socialPlatform: null });
+          return;
+        }
+
+        const url = raw;
         fetchBtn.disabled = true;
-        fetchBtn.textContent = '抓取中…';
+        fetchBtn.textContent = '提取中…';
+        resultHost.innerHTML = '';
         try {
           const res = await api('/api/fetch-url', { method: 'POST', body: { url } });
           renderLinkResult(res);
-        } catch { /* api 已提示 */ } finally {
+        } catch (err) {
+          const hint = err?.payload?.hint;
+          if (hint) {
+            // 平台专属引导：直接展示在结果区，避免 toast 一闪而过看不清
+            resultHost.innerHTML = `
+              <div class="notice" style="border-left:3px solid var(--danger,#c0392b);white-space:pre-wrap;line-height:1.9">
+                <strong>${esc(err.message)}</strong><br>${esc(hint)}
+              </div>`;
+          }
+          /* 其余情况 api 已弹出 toast */
+        } finally {
           fetchBtn.disabled = false;
-          fetchBtn.textContent = '抓取内容';
+          fetchBtn.textContent = '提取文案';
         }
       };
       fetchBtn.addEventListener('click', run);
