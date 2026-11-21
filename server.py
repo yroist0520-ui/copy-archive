@@ -984,14 +984,21 @@ def handle_api(handler, method, path, query, conn):
         color = clean_text(body.get("color") or "#1a1917", "颜色", max_len=20)
         if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
             raise ApiError(400, "颜色需为 #RRGGBB 格式")
+        group = clean_text(body.get("group") or "自定义", "分组", max_len=30).strip() or "自定义"
         if conn.execute("SELECT 1 FROM categories WHERE user_id = ? AND name = ?", (me["id"], name)).fetchone():
             raise ApiError(409, "分类名称已存在")
-        order = conn.execute("SELECT COALESCE(MAX(sort_order),0)+1 AS n FROM categories WHERE user_id = ?", (me["id"],)).fetchone()["n"]
+        if "sortOrder" in body:
+            try:
+                order = int(body["sortOrder"])
+            except (TypeError, ValueError):
+                order = conn.execute("SELECT COALESCE(MAX(sort_order),0)+1 AS n FROM categories WHERE user_id = ?", (me["id"],)).fetchone()["n"]
+        else:
+            order = conn.execute("SELECT COALESCE(MAX(sort_order),0)+1 AS n FROM categories WHERE user_id = ?", (me["id"],)).fetchone()["n"]
         cur = conn.execute(
-            "INSERT INTO categories (user_id, name, group_name, color, sort_order, is_default, created_at) VALUES (?, ?, '自定义', ?, ?, 0, ?)",
-            (me["id"], name, color, order, now_iso()),
+            "INSERT INTO categories (user_id, name, group_name, color, sort_order, is_default, created_at) VALUES (?, ?, ?, ?, ?, 0, ?)",
+            (me["id"], name, group, color, order, now_iso()),
         )
-        return 201, {"id": cur.lastrowid, "name": name, "color": color, "group": "自定义", "count": 0}
+        return 201, {"id": cur.lastrowid, "name": name, "color": color, "group": group, "count": 0}
 
     m = re.fullmatch(r"/api/categories/(\d+)", path)
     if m and method in ("PATCH", "DELETE"):
@@ -1008,6 +1015,7 @@ def handle_api(handler, method, path, query, conn):
         body = read_body(handler)
         name = row["name"]
         color = row["color"]
+        group = row["group_name"]
         sort_order = row["sort_order"]
         if "name" in body:
             name = clean_text(body["name"], "分类名称", required=True, max_len=30).strip()
@@ -1018,12 +1026,14 @@ def handle_api(handler, method, path, query, conn):
             color = clean_text(body["color"], "颜色", max_len=20)
             if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
                 raise ApiError(400, "颜色需为 #RRGGBB 格式")
+        if "group" in body:
+            group = clean_text(body["group"], "分组", max_len=30).strip() or "自定义"
         if "sortOrder" in body:
             try:
                 sort_order = int(body["sortOrder"])
             except (TypeError, ValueError):
                 raise ApiError(400, "排序值不正确")
-        conn.execute("UPDATE categories SET name = ?, color = ?, sort_order = ? WHERE id = ?", (name, color, sort_order, cid))
+        conn.execute("UPDATE categories SET name = ?, color = ?, group_name = ?, sort_order = ? WHERE id = ?", (name, color, group, sort_order, cid))
         return 200, {"id": cid, "name": name, "color": color, "sortOrder": sort_order}
 
     if path == "/api/categories/reorder" and method == "POST":
