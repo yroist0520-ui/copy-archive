@@ -143,13 +143,29 @@ async function importEntries(payload) {
   }
   const fresh = payload.entries.filter((x) => x.content && !dupSet.has(x.content));
 
-  // 2. 分类映射：已有 → 直接用；缺失 → 创建
+  // 2. 分类映射：已有 → 补齐颜色/分组/排序；缺失 → 创建（含空分类）
   const catData = await api('/api/categories');
+  const cloudByName = new Map(catData.items.map((c) => [c.name, c]));
   const nameMap = new Map(catData.items.map((c) => [c.name, c.id]));
-  for (const cname of payload.categories || []) {
-    if (!nameMap.has(cname)) {
+  // v2 链接带 categoryDefs（含颜色/分组/排序/空分类），v1 只有字符串名
+  const defs = Array.isArray(payload.categoryDefs)
+    ? payload.categoryDefs
+    : (payload.categories || []).map((name) => ({ name, group: '自定义', color: '#1a1917', sortOrder: 9999 }));
+  for (const def of defs) {
+    const cname = def && def.name ? def.name : (typeof def === 'string' ? def : '');
+    if (!cname) continue;
+    const color = /^#[0-9a-fA-F]{6}$/.test(def.color) ? def.color : '#1a1917';
+    const group = String(def.group || '自定义').slice(0, 30);
+    const sortOrder = Number.isFinite(def.sortOrder) ? def.sortOrder : 9999;
+    if (cloudByName.has(cname)) {
+      const cloud = cloudByName.get(cname);
+      if (cloud.group !== group || cloud.color !== color || cloud.sortOrder !== sortOrder) {
+        try { await api(`/api/categories/${cloud.id}`, { method: 'PATCH', body: { color, group, sortOrder } }); }
+        catch { /* 补属性失败不影响投稿 */ }
+      }
+    } else {
       try {
-        const created = await api('/api/categories', { method: 'POST', body: { name: String(cname).slice(0, 30) } });
+        const created = await api('/api/categories', { method: 'POST', body: { name: String(cname).slice(0, 30), color, group, sortOrder } });
         nameMap.set(cname, created.id);
       } catch { /* 同名冲突等，跳过该分类 */ }
     }
