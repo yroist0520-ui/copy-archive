@@ -3,7 +3,7 @@ import {
   state, api, route, esc, fmtDate, openAuth, logout, toast, copyText,
   loadCategories, debounce, refreshSession, updateAuthButton, renderRoute, BASE,
   loadSamples, seedSampleEntries, SHARE_CODE, FULL_VERSION_URL, currentQuery, openModal,
-  openChangePassword, switchToCloud, confirmDialog,
+  openChangePassword, switchToCloud, confirmDialog, cloudRequest,
 } from './core.js';
 import { copyGrid, bindCopyCards, emptyState, categoryChips, bindChips, pagination } from './ui.js';
 import { openDetail } from './detail.js';
@@ -111,9 +111,10 @@ export function registerProfile() {
         ${state.offlineMode ? `
         <section class="section">
           <div class="section-head reveal"><span class="section-index">04</span><h2 class="section-title">Share</h2><span class="section-note">本地版无法直接分享 · 可投稿到公开档案</span></div>
-          <div class="notice reveal d1">这是<strong>本地版</strong>：档案与文案只保存在当前设备的浏览器里，直接发链接别人看不到。两个办法把文案带给别人：<strong>投稿</strong>到完整版的公开档案馆（所有人可搜索、复制），或在完整版建立档案后分享链接。</div>
+          <div class="notice reveal d1">这是<strong>本地版</strong>：档案与文案只保存在当前设备的浏览器里，直接发链接别人看不到。想让文案在三端通用，用「<strong>迁移到云端档案</strong>」把它们同步到你的云端账号——之后在 iPad / 手机 / 电脑登录同一账号就能看到全部文案，重复文案会自动跳过。也可以<strong>投稿</strong>到公开档案馆供所有人浏览。</div>
           <div class="reveal d1" style="margin-top:12px;display:flex;gap:12px;flex-wrap:wrap">
-            <button class="btn btn-sm btn-primary" id="p-contribute">投稿到公开档案 ↗</button>
+            <button class="btn btn-sm btn-primary" id="p-migrate-cloud">迁移到我的云端档案 ☁</button>
+            <button class="btn btn-sm" id="p-contribute">投稿到公开档案 ↗</button>
             <a class="btn btn-sm" href="${esc(FULL_VERSION_URL)}" target="_blank" rel="noopener">打开完整版 · 建立可分享的档案</a>
             <a class="btn btn-sm" href="/archive" data-link>继续整理本地文案</a>
           </div>
@@ -249,6 +250,8 @@ export function registerProfile() {
     }
     const contributeBtn = app.querySelector('#p-contribute');
     if (contributeBtn) contributeBtn.addEventListener('click', () => openContributeModal(me));
+    const migrateBtn = app.querySelector('#p-migrate-cloud');
+    if (migrateBtn) migrateBtn.addEventListener('click', () => openCloudMigrateModal(me));
     // 切换账号：直接开登录框（含注册入口）。登录成功后 openAuth 内部会 refreshSession + renderRoute，
     // 页面自动变为新账号档案；同域新 session 覆盖旧 cookie，无需先退出。
     const switchBtn = app.querySelector('#p-switch');
@@ -467,6 +470,208 @@ async function openContributeModal(me) {
         root.querySelector('#ct-make').textContent = '重新生成';
         toast('投稿链接已生成，已自动复制');
         copyText(url);
+      };
+    },
+  });
+}
+
+/* ---- 迁移到云端个人档案：本地文案 → 云端账号（直连云端 API，不受离线模式影响） ---- */
+
+async function openCloudMigrateModal(me) {
+  openModal({
+    kicker: 'CLOUD SYNC',
+    title: '迁移到我的云端档案',
+    wide: true,
+    body: `
+      <div class="notice d1" style="margin-bottom:16px">把当前本地档案的文案复制到<strong>云端账号</strong>。迁移后，在 iPad / 手机 / 电脑登录同一个云端账号即可看到全部文案。已有的重复文案会自动跳过，不会删掉本地数据。</div>
+      <div class="field"><label class="field-label" for="cm-account">云端账号</label>
+        <input class="input" id="cm-account" autocomplete="username" placeholder="云端用户名 / 邮箱"></div>
+      <div class="field"><label class="field-label" for="cm-pass">密码</label>
+        <input class="input" id="cm-pass" type="password" autocomplete="current-password" placeholder="云端账号密码"></div>
+      <p class="field-hint" id="cm-status" style="margin-top:6px">登录云端后才会统计与迁移，本地档案保持不变。</p>`,
+    foot: `
+      <button class="btn btn-sm" id="cm-check">登录并预览</button>
+      <button class="btn btn-sm btn-primary" id="cm-go" disabled>确认迁移</button>
+      <button class="btn btn-sm" data-close>关闭</button>`,
+    onMount(root, close) {
+      root.querySelector('[data-close]').onclick = close;
+      const status = root.querySelector('#cm-status');
+      const goBtn = root.querySelector('#cm-go');
+      const checkBtn = root.querySelector('#cm-check');
+      let plan = null; // { token, all, groups, picked, freshCount, dupCount }
+
+      const login = async () => {
+        const account = root.querySelector('#cm-account').value.trim();
+        const password = root.querySelector('#cm-pass').value;
+        if (!account || !password) { toast('请填写云端账号和密码', 'error'); return null; }
+        checkBtn.disabled = true;
+        status.textContent = '正在登录云端…';
+        try {
+          // 直接调用完整版登录接口，拿 token（跨站，不写入本地档案会话）
+          const res = await cloudRequest('/api/auth/login', { method: 'POST', body: { account, password } });
+          if (!res.token) throw new Error('登录未返回令牌');
+          return res.token;
+        } finally {
+          checkBtn.disabled = false;
+        }
+      };
+
+      const readLocal = async () => {
+        let all = [];
+        for (let page = 1; page <= 100; page++) {
+          const data = await localApi(`/api/copies?page=${page}&pageSize=100&sort=newest`);
+          all = all.concat(data.items || []);
+          if (!data.hasMore || !(data.items || []).length) break;
+        }
+        return all;
+      };
+
+      const groupByCategory = (all) => {
+        const groups = new Map();
+        all.forEach((c) => {
+          const names = (c.categories || []).map((x) => x.name);
+          (names.length ? names : ['未分类']).forEach((n) => {
+            if (!groups.has(n)) groups.set(n, []);
+            groups.get(n).push(c);
+          });
+        });
+        return groups;
+      };
+
+      const renderGroupPicker = (all, groups) => {
+        status.innerHTML = '<b style="color:var(--green)">✓ 已登录云端</b> · 选择要迁移的分类：';
+        const picker = document.createElement('div');
+        picker.className = 'check-grid';
+        picker.style.cssText = 'max-height:240px;overflow:auto;margin-top:10px';
+        picker.innerHTML = [...groups.entries()].map(([name, list]) => `
+          <label class="check-item plain"><input type="checkbox" data-cm-group value="${esc(name)}" checked style="margin-right:8px"><b>${esc(name)}</b><span class="field-hint" style="margin-left:8px">${list.length} 条</span></label>`).join('');
+        const hint = document.createElement('div');
+        hint.className = 'field-hint';
+        hint.style.marginTop = '8px';
+        const sel = document.createElement('div');
+        sel.style.cssText = 'margin-top:10px;display:flex;gap:12px;align-items:center;flex-wrap:wrap';
+        sel.innerHTML = `<button class="btn btn-sm" id="cm-all">全选</button><button class="btn btn-sm" id="cm-none">清空</button><span class="field-hint" id="cm-count"></span>`;
+        root.querySelector('.modal-body').append(picker, hint, sel);
+        const countEl = sel.querySelector('#cm-count');
+        const boxes = [...picker.querySelectorAll('[data-cm-group]')];
+        const update = () => {
+          const picked = new Set(boxes.filter((b) => b.checked).map((b) => b.value));
+          const entries = dedupeEntries(all.filter((c) => {
+            const names = (c.categories || []).map((x) => x.name);
+            return (names.length ? names : ['未分类']).some((x) => picked.has(x));
+          }));
+          plan.picked = picked;
+          plan.entries = entries;
+          countEl.textContent = `将迁移 ${entries.length} 条（重复自动跳过）`;
+          goBtn.disabled = !entries.length;
+          return entries;
+        };
+        boxes.forEach((b) => b.addEventListener('change', update));
+        sel.querySelector('#cm-all').onclick = () => { boxes.forEach((b) => { b.checked = true; }); update(); };
+        sel.querySelector('#cm-none').onclick = () => { boxes.forEach((b) => { b.checked = false; }); update(); };
+        checkBtn.textContent = '重新登录';
+        update();
+        checkBtn.onclick = async () => {
+          picker.remove(); hint.remove(); sel.remove();
+          checkBtn.textContent = '登录并预览';
+          await startPreview();
+        };
+        return update;
+      };
+
+      const dedupeEntries = (list) => {
+        const seen = new Set();
+        const out = [];
+        list.forEach((c) => {
+          const content = c.content || '';
+          if (!content || seen.has(content)) return;
+          seen.add(content);
+          out.push({
+            content,
+            title: c.title || '',
+            note: c.note || '',
+            tags: Array.isArray(c.tags) ? c.tags : [],
+            categories: (c.categories || []).map((x) => x.name),
+          });
+        });
+        return out;
+      };
+
+      const startPreview = async () => {
+        goBtn.disabled = true;
+        const token = await login();
+        if (!token) return;
+        status.textContent = '正在读取本地文案…';
+        let all;
+        try { all = await readLocal(); }
+        catch (err) { toast(err.message || '读取本地文案失败', 'error'); status.textContent = '读取本地文案失败'; return; }
+        if (!all.length) { toast('本地还没有文案可迁移', 'error'); status.textContent = '本地还没有文案可迁移'; return; }
+        const groups = groupByCategory(all);
+        plan = { token, all, groups, entries: [], freshCount: 0, dupCount: 0 };
+        renderGroupPicker(all, groups);
+      };
+
+      checkBtn.onclick = startPreview;
+
+      goBtn.onclick = async () => {
+        if (!plan || !plan.entries.length) { toast('请先选择分类', 'error'); return; }
+        const entries = plan.entries;
+        goBtn.disabled = true;
+        checkBtn.disabled = true;
+        const original = goBtn.textContent;
+        goBtn.textContent = '正在迁移…';
+        try {
+          // 1) 分批查重
+          const dup = new Set();
+          for (let i = 0; i < entries.length; i += 200) {
+            const slice = entries.slice(i, i + 200).map((x) => x.content);
+            const d = await cloudRequest('/api/copies/check-duplicates', {
+              method: 'POST', token: plan.token, body: { contents: slice },
+            });
+            Object.keys(d.existing || {}).forEach((k) => dup.add(k));
+          }
+          const fresh = entries.filter((x) => !dup.has(x.content));
+
+          // 2) 分类映射：已有直接用，缺失则创建
+          const catData = await cloudRequest('/api/categories', { token: plan.token });
+          const nameMap = new Map(catData.items.map((c) => [c.name, c.id]));
+          const wanted = [...new Set(fresh.flatMap((x) => x.categories))].filter(Boolean);
+          for (const name of wanted) {
+            if (nameMap.has(name)) continue;
+            try {
+              const created = await cloudRequest('/api/categories', {
+                method: 'POST', token: plan.token, body: { name: String(name).slice(0, 30) },
+              });
+              nameMap.set(name, created.id);
+            } catch { /* 同名冲突等，忽略 */ }
+          }
+
+          // 3) 分批导入
+          const items = fresh.map((x) => ({
+            content: x.content,
+            title: x.title,
+            note: x.note,
+            tags: x.tags,
+            categoryIds: x.categories.map((n) => nameMap.get(n)).filter(Boolean),
+          }));
+          let imported = 0;
+          for (let i = 0; i < items.length; i += 200) {
+            await cloudRequest('/api/copies/batch', {
+              method: 'POST', token: plan.token, body: { items: items.slice(i, i + 200) },
+            });
+            imported += Math.min(200, items.length - i);
+          }
+
+          status.innerHTML = `<b style="color:var(--green)">✓ 迁移完成</b>：新增 <b>${imported}</b> 条，跳过重复 <b>${dup.size}</b> 条。<br>现在到 iPad / 手机 / 电脑打开应用，用同一个云端账号登录即可看到全部文案。`;
+          goBtn.textContent = '迁移完成';
+          toast(`迁移完成：新增 ${imported} 条，跳过 ${dup.size} 条重复`);
+        } catch (err) {
+          toast(err.message || '迁移失败', 'error');
+          status.textContent = `迁移失败：${err.message || '请重试'}`;
+          goBtn.disabled = false;
+          checkBtn.disabled = false;
+          goBtn.textContent = original;
+        }
       };
     },
   });
