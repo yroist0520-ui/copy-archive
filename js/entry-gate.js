@@ -80,10 +80,13 @@ export function maybeShowEntryGate() {
     toast('已进入云端档案 · 账号三端通用');
   });
   gate.querySelector('#gate-local').addEventListener('click', () => {
-    // 离线只在当前会话有效，避免旧版那样永久把设备锁在与云端隔离的本地账号里
+    // 记住用户选择，避免每次打开都重复询问。
+    // localStorage 的 ca_entry_choice='local' 是永久标记：下次打开时
+    // maybeShowEntryGate 会据此跳过弹窗，core.js 也会据此进入本地离线模式。
+    // 若以后想切回云端，用「我的档案 → 切回云端账号」即可（会清除此标记）。
+    localStorage.setItem(CHOICE_KEY, 'local');
     sessionStorage.setItem('ca_offline_session', '1');
     sessionStorage.setItem(SEEN_KEY, '1');
-    localStorage.removeItem(CHOICE_KEY);
     // 重新加载让会话模式切换为本地离线档案
     location.reload();
   });
