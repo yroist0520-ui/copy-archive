@@ -488,10 +488,11 @@ def list_copies(conn, viewer_id, target_user_id, params):
 # ---------------------------------------------------------------------------
 
 class ApiError(Exception):
-    def __init__(self, status, message):
+    def __init__(self, status, message, extra=None):
         super().__init__(message)
         self.status = status
         self.message = message
+        self.extra = extra or {}
 
 
 def read_body(handler, max_bytes=4 * 1024 * 1024):
@@ -846,6 +847,126 @@ def extract_page(html_text, base_url):
             parser.title = re.sub(r"<[^>]+>", "", m.group(1)).strip()
     return parser.title[:150], lines, images
 
+
+# ---------------------------------------------------------------------------
+# 社交平台分享链接：小红书 / 抖音 / 快手
+# 这些站点正文由 JS 渲染且有登录/签名校验，常规 HTML 抓取拿不到正文。
+# 策略：识别平台 → 尝试从内嵌 JSON / meta 里挖出文案 → 挖不到则返回带平台专属
+# 操作指引的结构化错误，引导用户用「复制分享文本」或「图片 OCR」导入。
+# ---------------------------------------------------------------------------
+
+SOCIAL_PLATFORMS = (
+    ("xiaohongshu", ("xiaohongshu.com", "xhslink.com"), "小红书"),
+    ("douyin", ("douyin.com", "iesdouyin.com", "snssdk.com"), "抖音"),
+    ("kuaishou", ("kuaishou.com", "gifshow.com", "v.kuaishou.com"), "快手"),
+)
+
+# 各平台「复制链接后如何拿到文字」的专属指引
+SOCIAL_HINTS = {
+    "xiaohongshu": (
+        "小红书正文受登录保护，直接抓链接拿不到文字。请在小红书 App 打开笔记 → 点分享 →「复制链接」，"
+        "然后把复制到的整段文字（含标题和正文，不只是网址）粘贴到下方输入框，我会自动拆成文案；"
+        "或把笔记图片存到相册，用「批量上传 → 图片识别」提取文字。"
+    ),
+    "douyin": (
+        "抖音文案需要登录且正文由脚本渲染，直接抓链接拿不到文字。请在抖音 App 打开视频/图文 → 分享 →「复制链接」，"
+        "把复制到的整段文字粘贴到下方输入框自动提取；或直接把视频封面/图文存成图片，"
+        "用「批量上传 → 图片识别」提取文字。"
+    ),
+    "kuaishou": (
+        "快手文案需要登录，直接抓链接拿不到文字。请在快手 App 打开作品 → 分享 →「复制链接」，"
+        "把复制到的整段文字粘贴到下方输入框自动提取；或把作品图片存到相册，"
+        "用「批量上传 → 图片识别」提取文字。"
+    ),
+}
+
+
+def detect_social_platform(url):
+    """返回 (平台key, 平台中文名)；不是三大平台则返回 (None, None)。"""
+    try:
+        host = (urllib.parse.urlparse(url).hostname or "").lower()
+    except Exception:
+        return None, None
+    for key, domains, label in SOCIAL_PLATFORMS:
+        for d in domains:
+            if host == d or host.endswith("." + d):
+                return key, label
+    return None, None
+
+
+def _decode_embedded_json(fragment):
+    """页面内嵌 JSON 常见两种形态：明文、URL 编码。尽力还原成文本。"""
+    out = fragment
+    try:
+        # 抖音 RENDER_DATA 常是 encodeURIComponent 后的 JSON
+        if "%7B" in fragment or "%22" in fragment:
+            out = urllib.parse.unquote(fragment)
+    except Exception:
+        out = fragment
+    return out
+
+
+def extract_social_lines(html_text):
+    """从社交平台页面的 meta 标签与内嵌 JSON 中尽力挖出文案行。
+
+    返回按出现顺序去重的字符串列表；拿不到则返回空列表。
+    仅做保守提取，不改写原文。
+    """
+    found = []
+
+    def add(text):
+        if not isinstance(text, str):
+            return
+        text = re.sub(r"\s+", " ", text).strip().strip('"\'')
+        # 去掉明显的 JSON 噪声与标签
+        text = re.sub(r"<[^>]+>", "", text).strip()
+        if len(text) >= 2 and len(text) <= 600 and text not in found:
+            found.append(text)
+
+    decoded = _decode_embedded_json(html_text)
+
+    # 1) meta 描述 / 标题（og:title, og:description, twitter:description, description）
+    meta_pat = re.compile(
+        r'<meta[^>]+?(?:property|name)\s*=\s*["\'](og:title|og:description|twitter:description|description|title)["\'][^>]*?content\s*=\s*["\']([^"\']+)["\']',
+        re.I,
+    )
+    for _key, val in meta_pat.findall(html_text):
+        add(val)
+
+    # 2) 内嵌 JSON 常见文案字段：desc / description / title / content / text
+    for key in ("desc", "description", "content", "title", "text", "caption"):
+        for m in re.finditer(r'["\']' + key + r'["\']\s*:\s*["\']((?:[^"\'\\]|\\.){2,600})["\']', decoded):
+            val = m.group(1)
+            try:
+                val = json.loads('"' + val.replace('"', '\\"') + '"')
+            except Exception:
+                pass
+            add(val)
+        if len(found) >= 40:
+            break
+
+    # platform 页面常见噪声：纯数字/符号、UI 词、以及「仅支持在 App 内查看」这类壳页提示
+    noise = re.compile(
+        r"^(下载|打开App|APP内打开|App内打开|复制链接|分享|关注|点赞|评论|收藏|更多|登录|注册|首页|发现|我的|小红书|抖音|快手|[\d\W]+)$"
+        r"|仅支持在.{0,10}(APP|App|app).{0,6}查看|在.{0,8}(APP|App|app)内打开"
+    )
+    return [line for line in found if not noise.search(line)][:60]
+
+
+def is_social_shell_line(line):
+    """判断是否为社交平台壳页的无意义提示文案（非正文）。"""
+    s = line.strip()
+    if len(s) < 2:
+        return True
+    shell_patterns = (
+        r"^(小红书|抖音|快手)$",
+        r"(APP|App|app)内打开",
+        r"仅支持在.{0,12}查看",
+        r"^(打开|下载).{0,6}(APP|App|app)$",
+        r"复制链接|长按识别|扫码",
+        r"^[\d\W]+$",
+    )
+    return any(re.search(p, s) for p in shell_patterns)
 
 
 # ---------------------------------------------------------------------------
@@ -1274,6 +1395,24 @@ def handle_api(handler, method, path, query, conn):
         if not html_text:
             html_text = fetch_html(url)
         title, lines, images = extract_page(html_text, url)
+
+        # 小红书 / 抖音 / 快手：正文由 JS 渲染且有登录校验，常规提取常为空。
+        # 先从 meta 与内嵌 JSON 里尽力挖文案；仍拿不到则返回平台专属操作指引。
+        platform, platform_label = detect_social_platform(url)
+        if platform:
+            # 滤掉「App内打开 / 仅支持在App内查看」等壳页提示，避免误导入垃圾文案
+            lines = [ln for ln in lines if not is_social_shell_line(ln)]
+            if not lines:
+                for s in extract_social_lines(html_text):
+                    if s not in lines:
+                        lines.append(s)
+            if not lines and not images:
+                raise ApiError(
+                    422,
+                    f"{platform_label}链接暂时取不到文字，请换用下面的方式导入",
+                    {"socialPlatform": platform, "hint": SOCIAL_HINTS[platform]},
+                )
+
         if not lines and not images:
             raise ApiError(422, "没有从该页面提取到内容，可能是纯图片页或需要登录的页面")
         return 200, {
@@ -1283,6 +1422,7 @@ def handle_api(handler, method, path, query, conn):
             "images": images,
             "lineCount": len(lines),
             "imageCount": len(images),
+            "socialPlatform": platform,
         }
 
     # ---- 发现页 ----
@@ -1490,7 +1630,9 @@ class Handler(BaseHTTPRequestHandler):
                     extra_headers["Set-Cookie"] = self.cleared_cookie()
                 self.send_json(status, payload, extra_headers)
             except ApiError as exc:
-                self.send_json(exc.status, {"error": exc.message})
+                payload = {"error": exc.message}
+                payload.update(exc.extra or {})
+                self.send_json(exc.status, payload)
             except sqlite3.IntegrityError as exc:
                 self.send_json(409, {"error": "数据冲突：" + str(exc)})
             except Exception as exc:
