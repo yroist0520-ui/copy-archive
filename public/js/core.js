@@ -22,20 +22,6 @@ export function isTouchDevice() {
     || (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0);
 }
 
-/**
- * iOS 键盘兜底：输入框若已处于「程序聚焦但键盘没弹」的状态，
- * 用户再点它不会触发 focus 事件，键盘始终不出来。
- * 在触摸捕获阶段先 blur，让本次点击的默认行为重新聚焦并弹出键盘。
- */
-if (typeof document !== 'undefined' && (typeof matchMedia !== 'function' || matchMedia('(pointer: coarse)').matches || (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0))) {
-  document.addEventListener('touchend', (e) => {
-    const el = e.target && e.target.closest && e.target.closest('input, textarea, [contenteditable="true"]');
-    if (el && document.activeElement === el && !el.readOnly && !el.disabled) {
-      try { el.blur(); } catch { /* 忽略 */ }
-    }
-  }, true);
-}
-
 const app = document.getElementById('app');
 const modalHost = document.getElementById('modal-host');
 const toastHost = document.getElementById('toast-host');
