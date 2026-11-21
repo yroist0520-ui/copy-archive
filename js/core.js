@@ -229,6 +229,7 @@ export async function api(path, { method = 'GET', body, quiet = false } = {}) {
     if (response.status === 401 && token) clearToken();
     const error = new Error(payload.error || '操作失败');
     error.status = response.status;
+    error.payload = payload; // 保留结构化字段（如社交平台导入的操作指引 hint）
     if (!quiet && response.status !== 404) toast(error.message, 'error');
     throw error;
   }
