@@ -390,17 +390,28 @@ async function openContributeModal(me) {
     toast(err.message || '读取本地文案失败', 'error');
     return;
   }
-  if (!all.length) {
-    toast('还没有文案可投稿，先去上传几条吧', 'error');
+  // 本地全部分类（含空分类），带 group / color / sortOrder
+  let localCats = [];
+  try { localCats = (await localApi('/api/categories')).items || []; } catch { /* 忽略 */ }
+  if (!all.length && !localCats.length) {
+    toast('还没有文案或分类可投稿，先去上传几条吧', 'error');
     return;
   }
 
-  // 按分类分组（含未分类）
+  // 按本地「全部分类」分组（含空分类），再把文案归入对应分类
   const groups = new Map();
+  const catMeta = new Map();
+  (localCats || []).forEach((c) => {
+    groups.set(c.name, []);
+    catMeta.set(c.name, { name: c.name, group: c.group, color: c.color, sortOrder: c.sortOrder });
+  });
   all.forEach((c) => {
     const names = (c.categories || []).map((x) => x.name);
     (names.length ? names : ['未分类']).forEach((n) => {
-      if (!groups.has(n)) groups.set(n, []);
+      if (!groups.has(n)) {
+        groups.set(n, []);
+        catMeta.set(n, { name: n, group: '自定义', color: '#1a1917', sortOrder: 9999 });
+      }
       groups.get(n).push(c);
     });
   });
@@ -410,10 +421,10 @@ async function openContributeModal(me) {
     title: '投稿到公开档案',
     wide: true,
     body: `
-      <div class="field-hint" style="margin-bottom:16px">选择要投稿的分类（默认全选）。生成投稿链接后在完整版打开、登录你的档案即可完成投稿——投稿后所有人都能在公开档案里搜索到这些文案。</div>
+      <div class="field-hint" style="margin-bottom:16px">选择要投稿的分类（默认全选，含空分类）。投稿会把所选分类的<strong>文案 + 分类名称 + 颜色 + 分组</strong>一起带过去，在完整版打开链接、登录你的档案即可完成投稿。</div>
       <div class="check-grid" id="ct-groups" style="max-height:260px;overflow:auto">
         ${[...groups.entries()].map(([name, list]) => `
-          <label class="check-item plain"><input type="checkbox" data-ct-group value="${esc(name)}" checked style="margin-right:8px"><b>${esc(name)}</b><span class="field-hint" style="margin-left:8px">${list.length} 条</span></label>`).join('')}
+          <label class="check-item plain"><input type="checkbox" data-ct-group value="${esc(name)}" checked style="margin-right:8px"><b>${esc(name)}</b><span class="field-hint" style="margin-left:8px">${list.length} 条${!list.length ? ' · 空分类' : ''}</span></label>`).join('')}
       </div>
       <div style="margin-top:12px;display:flex;gap:12px;align-items:center">
         <button class="btn btn-sm" id="ct-sel-all">全选</button>
@@ -460,8 +471,10 @@ async function openContributeModal(me) {
             tags: c.tags || [],
             categories: (c.categories || []).map((x) => x.name),
           }));
-        const catNames = [...new Set(entries.flatMap((x) => x.categories))];
-        const url = buildContributeUrl({ v: 1, from: me.displayName, entries, categories: catNames });
+        // 全部分类元数据（含空分类、颜色、分组、排序），落地页据此建类
+        const categoryDefs = [...picked].map((n) => catMeta.get(n) || { name: n, group: '自定义', color: '#1a1917', sortOrder: 9999 });
+        const catNames = categoryDefs.map((c) => c.name);
+        const url = buildContributeUrl({ v: 2, from: me.displayName, entries, categories: catNames, categoryDefs });
         const box = root.querySelector('#ct-link-box');
         box.hidden = false;
         root.querySelector('#ct-link').value = url;
@@ -483,7 +496,7 @@ async function openCloudMigrateModal(me) {
     title: '迁移到我的云端档案',
     wide: true,
     body: `
-      <div class="notice d1" style="margin-bottom:16px">把当前本地档案的文案复制到<strong>云端账号</strong>。迁移后，在 iPad / 手机 / 电脑登录同一个云端账号即可看到全部文案。已有的重复文案会自动跳过，不会删掉本地数据。</div>
+      <div class="notice d1" style="margin-bottom:16px">把当前本地档案的<strong>全部文案</strong>和<strong>全部分类</strong>（包括还没有文案的空分类、分类颜色与分组）一起复制到<strong>云端账号</strong>。迁移后，在 iPad / 手机 / 电脑登录同一个云端账号即可看到全部内容。已有文案会自动跳过，不会删掉本地数据。</div>
       <div class="field"><label class="field-label" for="cm-account">云端账号</label>
         <input class="input" id="cm-account" autocomplete="username" placeholder="云端用户名 / 邮箱"></div>
       <div class="field"><label class="field-label" for="cm-pass">密码</label>
@@ -498,7 +511,7 @@ async function openCloudMigrateModal(me) {
       const status = root.querySelector('#cm-status');
       const goBtn = root.querySelector('#cm-go');
       const checkBtn = root.querySelector('#cm-check');
-      let plan = null; // { token, all, groups, picked, freshCount, dupCount }
+      let plan = null; // { token, all, localCats, groups, picked, entries }
 
       const login = async () => {
         const account = root.querySelector('#cm-account').value.trim();
@@ -526,13 +539,23 @@ async function openCloudMigrateModal(me) {
         return all;
       };
 
-      const groupByCategory = (all) => {
+      // 本地全部分类（含空分类），带 group / color / sortOrder
+      const readLocalCats = async () => {
+        try {
+          const data = await localApi('/api/categories');
+          return data.items || [];
+        } catch { return []; }
+      };
+
+      // 按本地「全部分类」分组：空分类也会出现，保证连空分类一起迁移
+      const groupByCategory = (all, cats) => {
         const groups = new Map();
+        (cats || []).forEach((c) => groups.set(c.name, { list: [], meta: c }));
         all.forEach((c) => {
           const names = (c.categories || []).map((x) => x.name);
           (names.length ? names : ['未分类']).forEach((n) => {
-            if (!groups.has(n)) groups.set(n, []);
-            groups.get(n).push(c);
+            if (!groups.has(n)) groups.set(n, { list: [], meta: { name: n, group: '自定义', color: '#1a1917', sortOrder: 9999 } });
+            groups.get(n).list.push(c);
           });
         });
         return groups;
@@ -543,8 +566,8 @@ async function openCloudMigrateModal(me) {
         const picker = document.createElement('div');
         picker.className = 'check-grid';
         picker.style.cssText = 'max-height:240px;overflow:auto;margin-top:10px';
-        picker.innerHTML = [...groups.entries()].map(([name, list]) => `
-          <label class="check-item plain"><input type="checkbox" data-cm-group value="${esc(name)}" checked style="margin-right:8px"><b>${esc(name)}</b><span class="field-hint" style="margin-left:8px">${list.length} 条</span></label>`).join('');
+        picker.innerHTML = [...groups.entries()].map(([name, g]) => `
+          <label class="check-item plain"><input type="checkbox" data-cm-group value="${esc(name)}" checked style="margin-right:8px"><b>${esc(name)}</b><span class="field-hint" style="margin-left:8px">${g.list.length} 条${!g.list.length ? ' · 空分类' : ''}</span></label>`).join('');
         const hint = document.createElement('div');
         hint.className = 'field-hint';
         hint.style.marginTop = '8px';
@@ -562,8 +585,8 @@ async function openCloudMigrateModal(me) {
           }));
           plan.picked = picked;
           plan.entries = entries;
-          countEl.textContent = `将迁移 ${entries.length} 条（重复自动跳过）`;
-          goBtn.disabled = !entries.length;
+          countEl.textContent = `将迁移 ${entries.length} 条文案 + ${picked.size} 个分类（重复自动跳过）`;
+          goBtn.disabled = !entries.length && !picked.size;
           return entries;
         };
         boxes.forEach((b) => b.addEventListener('change', update));
@@ -605,16 +628,19 @@ async function openCloudMigrateModal(me) {
         let all;
         try { all = await readLocal(); }
         catch (err) { toast(err.message || '读取本地文案失败', 'error'); status.textContent = '读取本地文案失败'; return; }
-        if (!all.length) { toast('本地还没有文案可迁移', 'error'); status.textContent = '本地还没有文案可迁移'; return; }
-        const groups = groupByCategory(all);
-        plan = { token, all, groups, entries: [], freshCount: 0, dupCount: 0 };
+        let localCats;
+        try { localCats = await readLocalCats(); }
+        catch { localCats = []; }
+        if (!all.length && !localCats.length) { toast('本地还没有文案或分类可迁移', 'error'); status.textContent = '本地还没有内容可迁移'; return; }
+        const groups = groupByCategory(all, localCats);
+        plan = { token, all, localCats, groups, entries: [], picked: new Set() };
         renderGroupPicker(all, groups);
       };
 
       checkBtn.onclick = startPreview;
 
       goBtn.onclick = async () => {
-        if (!plan || !plan.entries.length) { toast('请先选择分类', 'error'); return; }
+        if (!plan || (!plan.entries.length && !plan.picked.size)) { toast('请先选择要迁移的分类', 'error'); return; }
         const entries = plan.entries;
         goBtn.disabled = true;
         checkBtn.disabled = true;
@@ -632,21 +658,39 @@ async function openCloudMigrateModal(me) {
           }
           const fresh = entries.filter((x) => !dup.has(x.content));
 
-          // 2) 分类映射：已有直接用，缺失则创建
+          // 2) 迁移所有选中分类（含空分类）：已有则补齐颜色/分组/排序，缺失则创建
           const catData = await cloudRequest('/api/categories', { token: plan.token });
+          const cloudByName = new Map(catData.items.map((c) => [c.name, c]));
           const nameMap = new Map(catData.items.map((c) => [c.name, c.id]));
-          const wanted = [...new Set(fresh.flatMap((x) => x.categories))].filter(Boolean);
-          for (const name of wanted) {
-            if (nameMap.has(name)) continue;
-            try {
-              const created = await cloudRequest('/api/categories', {
-                method: 'POST', token: plan.token, body: { name: String(name).slice(0, 30) },
-              });
-              nameMap.set(name, created.id);
-            } catch { /* 同名冲突等，忽略 */ }
+          let catCreated = 0, catUpdated = 0;
+          for (const name of plan.picked) {
+            const meta = plan.groups.get(name)?.meta || { name, group: '自定义', color: '#1a1917', sortOrder: 9999 };
+            const color = /^#[0-9a-fA-F]{6}$/.test(meta.color) ? meta.color : '#1a1917';
+            const group = String(meta.group || '自定义').slice(0, 30);
+            const sortOrder = Number.isFinite(meta.sortOrder) ? meta.sortOrder : 9999;
+            if (cloudByName.has(name)) {
+              const cloud = cloudByName.get(name);
+              // 分组或颜色或排序不一致就补齐
+              if (cloud.group !== group || cloud.color !== color || cloud.sortOrder !== sortOrder) {
+                try {
+                  await cloudRequest(`/api/categories/${cloud.id}`, {
+                    method: 'PATCH', token: plan.token, body: { color, group, sortOrder },
+                  });
+                  catUpdated++;
+                } catch { /* 补属性失败不影响文案迁移 */ }
+              }
+            } else {
+              try {
+                const created = await cloudRequest('/api/categories', {
+                  method: 'POST', token: plan.token, body: { name: String(name).slice(0, 30), color, group, sortOrder },
+                });
+                nameMap.set(name, created.id);
+                catCreated++;
+              } catch { /* 同名冲突等，忽略 */ }
+            }
           }
 
-          // 3) 分批导入
+          // 3) 分批导入（文案关联到目标分类）
           const items = fresh.map((x) => ({
             content: x.content,
             title: x.title,
@@ -662,9 +706,9 @@ async function openCloudMigrateModal(me) {
             imported += Math.min(200, items.length - i);
           }
 
-          status.innerHTML = `<b style="color:var(--green)">✓ 迁移完成</b>：新增 <b>${imported}</b> 条，跳过重复 <b>${dup.size}</b> 条。<br>现在到 iPad / 手机 / 电脑打开应用，用同一个云端账号登录即可看到全部文案。`;
+          status.innerHTML = `<b style="color:var(--green)">✓ 迁移完成</b>：新增 <b>${imported}</b> 条文案，跳过重复 <b>${dup.size}</b> 条；新建 <b>${catCreated}</b> 个分类、补齐 <b>${catUpdated}</b> 个分类的颜色/分组。<br>现在到 iPad / 手机 / 电脑打开应用，用同一个云端账号登录即可看到全部内容。`;
           goBtn.textContent = '迁移完成';
-          toast(`迁移完成：新增 ${imported} 条，跳过 ${dup.size} 条重复`);
+          toast(`迁移完成：新增 ${imported} 条、新建 ${catCreated} 个分类`);
         } catch (err) {
           toast(err.message || '迁移失败', 'error');
           status.textContent = `迁移失败：${err.message || '请重试'}`;
