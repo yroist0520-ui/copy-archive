@@ -482,13 +482,16 @@ async function handle(db, method, path, query, body) {
     if (db.categories.some((c) => c.userId === me.id && c.name === name)) {
       throw new LocalApiError(409, '分类名称已存在');
     }
-    const order = Math.max(0, ...db.categories.filter((c) => c.userId === me.id).map((c) => c.sortOrder)) + 1;
+    const group = String(body.group || '自定义').slice(0, 30) || '自定义';
+    const order = Number.isFinite(body.sortOrder)
+      ? body.sortOrder
+      : Math.max(0, ...db.categories.filter((c) => c.userId === me.id).map((c) => c.sortOrder)) + 1;
     const id = nextId(db, 'categories');
     db.categories.push({
-      id, userId: me.id, name, group: '自定义', color, sortOrder: order, isDefault: false, createdAt: nowIso(),
+      id, userId: me.id, name, group, color, sortOrder: order, isDefault: false, createdAt: nowIso(),
     });
     writeDb(db);
-    return { id, name, color, group: '自定义', count: 0 };
+    return { id, name, color, group, count: 0 };
   }
 
   let m = path.match(/^\/api\/categories\/(\d+)$/);
@@ -509,6 +512,7 @@ async function handle(db, method, path, query, body) {
     }
     let name = row.name;
     let color = row.color;
+    let group = row.group || '自定义';
     let sortOrder = row.sortOrder;
     if ('name' in body) {
       name = cleanText(body.name, '分类名称', { required: true, maxLen: 30 }).trim();
@@ -520,14 +524,18 @@ async function handle(db, method, path, query, body) {
       color = cleanText(body.color, '颜色', { maxLen: 20 });
       if (!/^#[0-9a-fA-F]{6}$/.test(color)) throw new LocalApiError(400, '颜色需为 #RRGGBB 格式');
     }
+    if ('group' in body) {
+      group = String(body.group || '自定义').slice(0, 30) || '自定义';
+    }
     if ('sortOrder' in body) {
       sortOrder = Number(body.sortOrder) || 0;
     }
     row.name = name;
     row.color = color;
+    row.group = group;
     row.sortOrder = sortOrder;
     writeDb(db);
-    return { id: cid, name, color, sortOrder };
+    return { id: cid, name, color, group, sortOrder };
   }
 
   if (path === '/api/categories/reorder' && method === 'POST') {
