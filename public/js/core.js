@@ -12,6 +12,30 @@ export const state = {
   offlineMode: false, // 用户主动选择的本地离线档案（数据只在当前浏览器）
 };
 
+/**
+ * 触屏设备（iPad / 手机）上，程序自动 focus() 不会呼出软键盘；
+ * 更麻烦的是输入框会处于“已聚焦但无键盘”的状态，用户再点一次同一输入框也常常无效。
+ * 因此凡是 setTimeout 后的自动聚焦都要先过这一关，把第一次真实点击留给键盘。
+ */
+export function isTouchDevice() {
+  return (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches)
+    || (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0);
+}
+
+/**
+ * iOS 键盘兜底：输入框若已处于「程序聚焦但键盘没弹」的状态，
+ * 用户再点它不会触发 focus 事件，键盘始终不出来。
+ * 在触摸捕获阶段先 blur，让本次点击的默认行为重新聚焦并弹出键盘。
+ */
+if (typeof document !== 'undefined' && (typeof matchMedia !== 'function' || matchMedia('(pointer: coarse)').matches || (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0))) {
+  document.addEventListener('touchend', (e) => {
+    const el = e.target && e.target.closest && e.target.closest('input, textarea, [contenteditable="true"]');
+    if (el && document.activeElement === el && !el.readOnly && !el.disabled) {
+      try { el.blur(); } catch { /* 忽略 */ }
+    }
+  }, true);
+}
+
 const app = document.getElementById('app');
 const modalHost = document.getElementById('modal-host');
 const toastHost = document.getElementById('toast-host');
@@ -361,7 +385,8 @@ export function openModal({ kicker = '', title = '', body = '', foot = '', wide 
   backdrop.querySelector('.modal-close').addEventListener('click', close);
   if (onMount) onMount(backdrop, close);
   const first = backdrop.querySelector('input, textarea, button:not(.modal-close)');
-  if (first) setTimeout(() => first.focus(), 60);
+  // 触屏上不要程序聚焦：iOS 不弹键盘，还会让随后点同一输入框也失效
+  if (first && !isTouchDevice()) setTimeout(() => first.focus(), 60);
   return close;
 }
 
@@ -726,6 +751,7 @@ export function initCore() {
   });
   document.getElementById('global-search').addEventListener('click', () => {
     navigate('/archive?focus=1');
-    setTimeout(() => document.getElementById('archive-search')?.focus(), 200);
+    // 触屏上程序聚焦不会弹键盘；让用户直接点搜索框，才能正常呼出输入
+    if (!isTouchDevice()) setTimeout(() => document.getElementById('archive-search')?.focus(), 200);
   });
 }

@@ -1,7 +1,7 @@
 /* 文案库：搜索、筛选、排序、双视图、分页、批量管理 */
 import {
   state, api, route, esc, debounce, navigate, requireLogin, openAuth,
-  openModal, confirmDialog, toast, copyText, currentQuery, loadCategories,
+  openModal, confirmDialog, toast, copyText, currentQuery, loadCategories, isTouchDevice,
 } from './core.js';
 import {
   copyGrid, bindCopyCards, emptyState, categoryChips, bindChips, pagination,
@@ -233,7 +233,8 @@ export function registerArchive() {
     });
 
     await load(1);
-    if (currentQuery().get('focus')) setTimeout(() => search.focus(), 200);
+    // 触屏上程序聚焦不会弹键盘；保留搜索框可见，由用户点击呼出
+    if (currentQuery().get('focus') && !isTouchDevice()) setTimeout(() => search.focus(), 200);
   });
 }
 
