@@ -959,11 +959,13 @@ def is_social_shell_line(line):
     if len(s) < 2:
         return True
     shell_patterns = (
-        r"^(小红书|抖音|快手)$",
+        r"^(小红书|抖音|快手)(APP|App|app)?$",
+        r"^(打开|下载)?(小红书|抖音|快手)?(APP|App|app)$",
         r"(APP|App|app)内打开",
         r"仅支持在.{0,12}查看",
         r"^(打开|下载).{0,6}(APP|App|app)$",
         r"复制链接|长按识别|扫码",
+        r"海量精彩视频|精彩视频等你|更多精彩|看视频|刷视频|下载.{0,4}看",
         r"^[\d\W]+$",
     )
     return any(re.search(p, s) for p in shell_patterns)
