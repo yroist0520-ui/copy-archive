@@ -225,6 +225,37 @@ export async function api(path, { method = 'GET', body, quiet = false } = {}) {
   return payload;
 }
 
+/**
+ * 强制直连完整版云端 API（不受 offlineMode 影响）。
+ * 供「本地档案 → 云端账号」迁移使用：当前浏览器处于本地离线档案时，api() 会走
+ * localStorage，这里单独走云端，token 由参数显式传入（登录时可省略）。
+ */
+export async function cloudRequest(path, { method = 'GET', body, token = '' } = {}) {
+  const options = {
+    method,
+    credentials: 'omit',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+  };
+  if (token) {
+    options.headers['Authorization'] = `Bearer ${token}`;
+    options.headers['X-CA-Token'] = token;
+  }
+  if (body !== undefined) {
+    options.headers['Content-Type'] = 'application/json';
+    options.body = JSON.stringify(body);
+  }
+  const response = await fetch(cloudApiUrl(path), options);
+  let payload;
+  try { payload = await response.json(); }
+  catch { payload = { error: '服务器返回异常' }; }
+  if (!response.ok) {
+    const error = new Error(payload.error || `操作失败（${response.status}）`);
+    error.status = response.status;
+    throw error;
+  }
+  return payload;
+}
+
 /* ---------------- 工具 ---------------- */
 
 export function esc(value) {
