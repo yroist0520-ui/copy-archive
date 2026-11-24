@@ -469,3 +469,5 @@ export function fuzzyMatch(text, query) {
   if (full.includes(q) || initials.includes(q)) return true;
   return isSubsequence(q, initials) || isSubsequence(q, full);
 }
+
+// deployed 20261124c
