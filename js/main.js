@@ -7,6 +7,7 @@ import { registerCategories } from './categories.js';
 import { registerFavorites } from './favorites.js';
 import { registerProfile } from './profile.js';
 import { registerDiscover } from './discover.js';
+import { registerSerendipity } from './serendipity.js';
 import { registerContribute } from './contribute.js';
 import { maybeShowEntryGate } from './entry-gate.js';
 
@@ -32,6 +33,7 @@ registerCategories();
 registerFavorites();
 registerProfile();
 registerDiscover();
+registerSerendipity();
 registerContribute();
 
 initCore();
