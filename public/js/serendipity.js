@@ -40,7 +40,11 @@ const SP_STYLE = `
 }
 .sp-quote::before{content:"“";color:var(--accent);opacity:.5;margin-right:4px}
 .sp-quote::after{content:"”";color:var(--accent);opacity:.5;margin-left:4px}
-.sp-cats{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:26px}
+.sp-cats{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:18px}
+.sp-nav{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:22px}
+.sp-nav .btn{min-width:92px}
+.sp-nav .btn:disabled{opacity:.38;cursor:not-allowed}
+.sp-pos{font-family:var(--font-mono);font-size:var(--t-small);color:var(--muted);min-width:58px;text-align:center}
 .sp-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;border-top:1px solid var(--line-soft);padding-top:24px}
 .sp-flip{animation:spIn .55s var(--ease-out)}
 @keyframes spIn{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
@@ -56,7 +60,7 @@ const SP_STYLE = `
 
 export function registerSerendipity() {
   route(/^\/serendipity$/, async ({ app }) => {
-    const view = { current: null, count: 0, lastId: null };
+    const view = { current: null, count: 0, lastId: null, history: [], index: -1 };
 
     app.innerHTML = `${SP_STYLE}
       <div class="container section sp-wrap" style="padding-top:56px">
@@ -73,6 +77,11 @@ export function registerSerendipity() {
             <div class="sp-face sp-face-back hidden" id="sp-back">
               <div class="sp-quote" id="sp-quote"></div>
               <div class="sp-cats" id="sp-cats"></div>
+              <div class="sp-nav">
+                <button class="btn btn-sm" id="sp-prev" disabled title="返回上一条（点太快时找回来）">← 上一条</button>
+                <span class="sp-pos" id="sp-pos">0 / 0</span>
+                <button class="btn btn-sm" id="sp-next" disabled title="前进到下一条">下一条 →</button>
+              </div>
               <div class="sp-actions">
                 <button class="btn btn-sm btn-primary" id="sp-again">再遇一句 ↻</button>
                 <button class="btn btn-sm" id="sp-copy">复制</button>
@@ -87,7 +96,7 @@ export function registerSerendipity() {
             <select class="select" id="sp-cat"><option value="">全部文案</option>${state.categories.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select></div>
           <div class="toolbar-group" style="margin-left:auto"><span class="sp-count" id="sp-count">已拆开 0 次</span></div>
         </div>
-        <p class="sp-hint" id="sp-hint">从你的档案里随机遇见一句话；登录不同设备看到的是同一份档案。未登录时，会从公开精选里抽取。</p>
+        <p class="sp-hint" id="sp-hint">从你的档案里随机遇见一句话；登录不同设备看到的是同一份档案。未登录时，会从公开精选里抽取。点太快没看清？用「← 上一条」找回来。</p>
       </div>`;
 
     const front = app.querySelector('#sp-front');
@@ -97,6 +106,9 @@ export function registerSerendipity() {
     const countEl = app.querySelector('#sp-count');
     const catSel = app.querySelector('#sp-cat');
     const favBtn = app.querySelector('#sp-fav');
+    const prevBtn = app.querySelector('#sp-prev');
+    const nextBtn = app.querySelector('#sp-next');
+    const posEl = app.querySelector('#sp-pos');
 
     function syncFav() {
       const on = !!(view.current && view.current.isFavorite);
@@ -104,11 +116,24 @@ export function registerSerendipity() {
       favBtn.classList.toggle('fav-on', on);
     }
 
-    function show(item) {
+    function syncNav() {
+      prevBtn.disabled = view.index <= 0;
+      nextBtn.disabled = view.index < 0 || view.index >= view.history.length - 1;
+      posEl.textContent = `${view.index + 1} / ${view.history.length}`;
+    }
+
+    /** record=true 表示新拆开的一条（计数+1、写入历史）；翻看历史时不计数 */
+    function show(item, { record = true } = {}) {
       view.current = item;
       view.lastId = item.id;
-      view.count += 1;
-      countEl.textContent = `已拆开 ${view.count} 次`;
+      if (record) {
+        view.history = view.history.slice(0, view.index + 1);
+        view.history.push(item);
+        view.index = view.history.length - 1;
+        view.count += 1;
+        countEl.textContent = `已拆开 ${view.count} 次`;
+      }
+      syncNav();
       quoteEl.textContent = item.content || '';
       const cats = (item.categories || []).map((c) => `<span class="chip" style="--cat-color:${esc(c.color)};min-height:22px;padding:1px 9px"><span class="cat-dot" style="background:${esc(c.color)}"></span>${esc(c.name)}</span>`).join('');
       catsEl.innerHTML = cats || '<span class="tag" style="opacity:.55">未分类</span>';
@@ -131,6 +156,8 @@ export function registerSerendipity() {
       if (openBtn) { openBtn.disabled = true; openBtn.textContent = '寻找中…'; }
       const againBtn = app.querySelector('#sp-again');
       if (againBtn) { againBtn.disabled = true; againBtn.textContent = '寻找中…'; }
+      prevBtn.disabled = true;
+      nextBtn.disabled = true;
       try {
         let pool = [];
         if (state.user) {
@@ -160,11 +187,22 @@ export function registerSerendipity() {
       } finally {
         if (openBtn) { openBtn.disabled = false; openBtn.textContent = '拆开盲盒'; }
         if (againBtn) { againBtn.disabled = false; againBtn.textContent = '再遇一句 ↻'; }
+        syncNav();
       }
     }
 
     app.querySelector('#sp-open').addEventListener('click', draw);
     app.querySelector('#sp-again').addEventListener('click', draw);
+    prevBtn.addEventListener('click', () => {
+      if (view.index <= 0) return;
+      view.index -= 1;
+      show(view.history[view.index], { record: false });
+    });
+    nextBtn.addEventListener('click', () => {
+      if (view.index < 0 || view.index >= view.history.length - 1) return;
+      view.index += 1;
+      show(view.history[view.index], { record: false });
+    });
     app.querySelector('#sp-copy').addEventListener('click', async () => {
       if (!view.current) return;
       const ok = await copyText(view.current.content);
