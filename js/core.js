@@ -1,6 +1,7 @@
 /* COPY ARCHIVE — 核心层：API、路由、状态、UI 原语 */
 
 import { localApi, setLocalMode, seedLocalSamples, localArchiveInfo, checkLocalAccount } from './local-api.js';
+import { feedback, initFeedback } from './feedback.js';
 
 export const state = {
   user: null,
@@ -333,6 +334,7 @@ export async function copyText(text) {
 }
 
 export function toast(message, kind = 'ok', ms = 2600) {
+  feedback(kind === 'error' ? 'error' : 'ok');
   const el = document.createElement('div');
   el.className = 'toast' + (kind === 'error' ? ' error' : '');
   el.textContent = message;
@@ -715,6 +717,7 @@ document.addEventListener('click', (e) => {
 window.addEventListener('popstate', renderRoute);
 
 export function initCore() {
+  initFeedback();
   document.getElementById('year').textContent = new Date().getFullYear();
   document.getElementById('auth-btn').addEventListener('click', () => {
     if (state.user) navigate('/profile');
