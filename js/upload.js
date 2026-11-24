@@ -3,6 +3,7 @@ import {
   state, api, route, esc, requireLogin, openAuth, openModal, toast, loadCategories, appUrl, cloudApiUrl,
 } from './core.js';
 import { categoryChips, bindChips } from './ui.js';
+import { fuzzyMatch } from './pinyin.js';
 
 /* ===========================================================================
  * 链接导入：抓取网页 → 提取文字（按行）→ 图片 OCR → 勾选编辑 → 统一分类 → 批量导入
@@ -59,6 +60,35 @@ function cleanOcrLines(text, existingKeys = new Set()) {
   return out;
 }
 
+/** 分类模糊搜索：按当前输入过滤 chip，只切换显隐以保留已绑定的选中/回调 */
+function syncCatSearch(grid) {
+  if (!grid) return;
+  const input = document.querySelector(`[data-cat-search="${grid.id}"]`);
+  const q = input ? input.value : '';
+  const names = new Map(state.categories.map((c) => [c.id, c.name]));
+  let visible = 0;
+  grid.querySelectorAll('.chip[data-cat]').forEach((chip) => {
+    const name = names.get(Number(chip.dataset.cat)) || '';
+    const ok = fuzzyMatch(name, q);
+    chip.classList.toggle('hidden', !ok);
+    if (ok) visible += 1;
+  });
+  const none = grid.querySelector('.cat-no-result');
+  if (none) none.classList.toggle('hidden', visible > 0);
+}
+
+/** 搜索框事件委托：全局只注册一次，页签/弹层重渲染后依然生效 */
+let catSearchDelegated = false;
+function ensureCatSearchDelegation() {
+  if (catSearchDelegated) return;
+  catSearchDelegated = true;
+  document.addEventListener('input', (e) => {
+    const input = e.target && e.target.closest ? e.target.closest('[data-cat-search]') : null;
+    if (!input) return;
+    syncCatSearch(document.getElementById(input.dataset.catSearch));
+  });
+}
+
 /** 新建分类按钮的事件委托，整页只注册一次（不随路由/页签渲染重复绑定） */
 let newCatDelegated = false;
 function ensureNewCatDelegation() {
@@ -101,6 +131,7 @@ function ensureNewCatDelegation() {
                   chip.setAttribute('aria-pressed', String(active));
                 });
               }
+              syncCatSearch(grid);
             }
           } catch { ok.disabled = false; }
         };
@@ -115,6 +146,7 @@ function ensureNewCatDelegation() {
 
 export function registerUpload() {
   ensureNewCatDelegation();
+  ensureCatSearchDelegation();
   route(/^\/upload$/, async ({ app }) => {
     if (!state.user) {
       app.innerHTML = `<div class="container section" style="padding-top:56px"><div class="empty">
@@ -142,7 +174,12 @@ export function registerUpload() {
     let active = 'single';
 
     function catPicker(id, selected = [], withNew = true) {
-      return `<div class="check-grid" id="${id}">${categoryChips(state.categories, selected)}</div>
+      return `<div class="cat-search-wrap">
+          <input class="input cat-search" type="search" data-cat-search="${id}" placeholder="搜索分类 · 支持拼音首字母（如 dm）" aria-label="搜索分类" autocomplete="off">
+          <div class="check-grid" id="${id}">${categoryChips(state.categories, selected)}
+            <span class="cat-no-result hidden">没有匹配的分类，可点下方「＋ 新建分类」</span>
+          </div>
+        </div>
         ${withNew ? `<button type="button" class="link-btn cat-new-btn" data-new-cat="${id}" style="margin-top:10px">＋ 新建分类</button>` : ''}`;
     }
 
@@ -178,6 +215,7 @@ export function registerUpload() {
         pane.querySelectorAll('input, textarea').forEach((el) => { el.value = ''; });
         pane.querySelectorAll('.chip').forEach((c) => c.classList.remove('active'));
         content.dispatchEvent(new Event('input'));
+        syncCatSearch(pane.querySelector('#s-cats'));
       };
       pane.querySelector('#s-save').onclick = async (e) => {
         const text = content.value;

@@ -661,6 +661,9 @@ html[data-theme="ink"] .archive-card { border-color: rgba(255, 255, 255, 0.1); }
 .check-grid .chip { background: var(--surface-solid); border: 1px solid var(--line); justify-content: flex-start; min-height: 38px; padding: 6px 12px; }
 .check-grid .chip:hover { background: var(--hover); border-color: var(--line-strong); }
 .check-grid .chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.cat-search-wrap { min-width: 0; }
+.cat-search { margin-bottom: 8px; font-size: var(--t-small); }
+.cat-no-result { grid-column: 1 / -1; padding: 12px 4px; color: var(--muted); font-size: var(--t-small); text-align: center; }
 
 .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: var(--s5); }
 .tab {
