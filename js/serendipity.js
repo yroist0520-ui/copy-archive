@@ -3,6 +3,7 @@ import {
   state, api, esc, route, toast, copyText, openAuth,
 } from './core.js';
 import { openDetail } from './detail.js';
+import { feedback } from './feedback.js';
 
 const SP_STYLE = `
 <style>
@@ -152,6 +153,7 @@ export function registerSerendipity() {
           if (pool.length) pool = [pool[Math.floor(Math.random() * pool.length)]];
         }
         if (!pool.length) { empty(); return; }
+        feedback('reveal');
         show(pool[Math.floor(Math.random() * pool.length)]);
       } catch (err) {
         toast(err.message || '抽取失败，请重试', 'error');
