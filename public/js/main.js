@@ -2,12 +2,12 @@
 import { initCore, refreshSession, renderRoute, loadCategories, navigate, stripBase } from './core.js';
 import { registerHome } from './home.js';
 import { registerArchive } from './archive.js';
-import { registerUpload } from './upload.js';
+import { registerUpload } from './upload.js?v=20261124c';
 import { registerCategories } from './categories.js';
 import { registerFavorites } from './favorites.js';
 import { registerProfile } from './profile.js';
 import { registerDiscover } from './discover.js';
-import { registerSerendipity } from './serendipity.js';
+import { registerSerendipity } from './serendipity.js?v=20261124c';
 import { registerContribute } from './contribute.js';
 import { maybeShowEntryGate } from './entry-gate.js';
 
