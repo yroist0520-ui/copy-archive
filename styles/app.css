@@ -72,6 +72,18 @@ html[data-theme="ink"] .theme-btn::before {
   mask-image: var(--icon-moon);
 }
 
+/* 音效与触感开关 */
+.sound-btn::before {
+  content: ""; width: 17px; height: 17px; background-color: currentColor;
+  -webkit-mask: var(--icon-sound) center/contain no-repeat;
+  mask: var(--icon-sound) center/contain no-repeat;
+}
+.sound-btn.muted::before {
+  -webkit-mask-image: var(--icon-sound-off);
+  mask-image: var(--icon-sound-off);
+  opacity: 0.55;
+}
+
 /* 导航图标按钮 */
 #global-search, .mobile-toggle { font-size: 0; }
 #global-search::before, .mobile-toggle::before {
